@@ -19,7 +19,8 @@
         "migrations": []
       },
       "options": {},
-      "installedAt": "2026-05-10T00:00:00.000Z"
+      "installedAt": "2026-05-10T00:00:00.000Z",
+      "migrationSyncVersion": "0.1.74"
     },
     "@local/main": {
       "packageId": "@local/main",
@@ -42,10 +43,13 @@
           "scripts": {}
         },
         "text": {},
-        "files": []
+        "vite": {},
+        "files": [],
+        "migrations": []
       },
       "options": {},
-      "installedAt": "1970-01-01T00:00:00.000Z"
+      "installedAt": "1970-01-01T00:00:00.000Z",
+      "migrationSyncVersion": "0.1.0"
     },
     "@local/current-app": {
       "packageId": "@local/current-app",
@@ -67,7 +71,8 @@
         "migrations": []
       },
       "options": {},
-      "installedAt": "2026-05-10T07:17:23.225Z"
+      "installedAt": "2026-05-10T07:17:23.225Z",
+      "migrationSyncVersion": "0.1.0"
     },
     "@local/bootstrap-doctor": {
       "packageId": "@local/bootstrap-doctor",
@@ -89,7 +94,8 @@
         "migrations": []
       },
       "options": {},
-      "installedAt": "2026-05-10T12:01:12.284Z"
+      "installedAt": "2026-05-10T12:01:12.284Z",
+      "migrationSyncVersion": "0.1.0"
     },
     "@local/target-app-doctor": {
       "packageId": "@local/target-app-doctor",
@@ -111,7 +117,8 @@
         "migrations": []
       },
       "options": {},
-      "installedAt": "2026-05-11T01:48:06.407Z"
+      "installedAt": "2026-05-11T01:48:06.407Z",
+      "migrationSyncVersion": "0.1.0"
     },
     "@local/app-setup-doctor": {
       "packageId": "@local/app-setup-doctor",
@@ -133,7 +140,8 @@
         "migrations": []
       },
       "options": {},
-      "installedAt": "2026-05-11T10:00:00.000Z"
+      "installedAt": "2026-05-11T10:00:00.000Z",
+      "migrationSyncVersion": "0.1.0"
     }
   }
 }
