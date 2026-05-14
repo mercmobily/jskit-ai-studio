@@ -5,42 +5,45 @@
     </v-alert>
 
     <div v-if="issueSessions.length || canCreateIssueSession" class="studio-issue-sessions__strip">
-      <v-chip
-        v-for="session in issueSessions"
-        :key="session.sessionId"
-        :color="session.sessionId === selectedSessionId ? 'primary' : 'default'"
-        :variant="session.sessionId === selectedSessionId ? 'flat' : 'tonal'"
-        class="studio-issue-sessions__tab studio-issue-sessions__tab-chip"
-        size="large"
-        @click="selectSession(session.sessionId)"
-      >
-        <span class="studio-issue-sessions__status-dot" :class="`studio-issue-sessions__status-dot--${session.status}`" />
-        <span>{{ shortSessionId(session.sessionId) }}</span>
-        <button
-          v-if="canAbandonSessionFromChip(session)"
-          aria-label="Abandon selected session"
-          class="studio-issue-sessions__tab-close"
-          type="button"
-          @click.stop="requestAbandonSession(session)"
-          @mousedown.stop
-          @pointerdown.stop
+      <div class="studio-issue-sessions__strip-tabs">
+        <v-chip
+          v-for="session in issueSessions"
+          :key="session.sessionId"
+          :color="session.sessionId === selectedSessionId ? 'primary' : 'default'"
+          :variant="session.sessionId === selectedSessionId ? 'flat' : 'tonal'"
+          class="studio-issue-sessions__tab studio-issue-sessions__tab-chip"
+          size="large"
+          @click="selectSession(session.sessionId)"
         >
-          <v-icon :icon="mdiClose" size="14" />
-        </button>
-      </v-chip>
-      <v-chip
-        v-if="canCreateIssueSession"
-        color="primary"
-        variant="tonal"
-        :prepend-icon="mdiPlus"
-        :disabled="issueSessionBusy"
-        class="studio-issue-sessions__tab studio-issue-sessions__new-tab"
-        :class="{ 'studio-issue-sessions__new-tab--busy': issueSessionBusy }"
-        size="large"
-        @click="createSession"
-      >
-        New Session
-      </v-chip>
+          <span class="studio-issue-sessions__status-dot" :class="`studio-issue-sessions__status-dot--${session.status}`" />
+          <span>{{ shortSessionId(session.sessionId) }}</span>
+          <button
+            v-if="canAbandonSessionFromChip(session)"
+            aria-label="Abandon selected session"
+            class="studio-issue-sessions__tab-close"
+            type="button"
+            @click.stop="requestAbandonSession(session)"
+            @mousedown.stop
+            @pointerdown.stop
+          >
+            <v-icon :icon="mdiClose" size="14" />
+          </button>
+        </v-chip>
+        <v-chip
+          v-if="canCreateIssueSession"
+          color="primary"
+          variant="tonal"
+          :prepend-icon="mdiPlus"
+          :disabled="issueSessionBusy"
+          class="studio-issue-sessions__tab studio-issue-sessions__new-tab"
+          :class="{ 'studio-issue-sessions__new-tab--busy': issueSessionBusy }"
+          size="large"
+          @click="createSession"
+        >
+          New Session
+        </v-chip>
+      </div>
+      <AppTestLauncher class="studio-issue-sessions__strip-action" />
     </div>
 
     <v-sheet v-else-if="!issueSessionsLoading" rounded="lg" border class="studio-issue-sessions__empty">
@@ -551,6 +554,7 @@ import {
   mdiSend
 } from "@mdi/js";
 import CodexSessionTerminal from "@/components/studio/CodexSessionTerminal.vue";
+import AppTestLauncher from "@/components/studio/AppTestLauncher.vue";
 import AppTestTerminal from "@/components/studio/AppTestTerminal.vue";
 import IssueSessionStepTerminal from "@/components/studio/IssueSessionStepTerminal.vue";
 import { useIssueSessions } from "@/composables/useIssueSessions.js";
@@ -2898,11 +2902,26 @@ onBeforeUnmount(() => {
 }
 
 .studio-issue-sessions__strip {
+  align-items: center;
   display: flex;
   gap: 0.5rem;
+  justify-content: space-between;
   margin-bottom: 0.75rem;
+  min-width: 0;
+}
+
+.studio-issue-sessions__strip-tabs {
+  align-items: center;
+  display: flex;
+  flex: 1 1 auto;
+  gap: 0.5rem;
+  min-width: 0;
   overflow-x: auto;
   padding-bottom: 0.125rem;
+}
+
+.studio-issue-sessions__strip-action {
+  flex: 0 0 auto;
 }
 
 .studio-issue-sessions__tab {
