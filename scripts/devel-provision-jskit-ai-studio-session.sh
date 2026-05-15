@@ -42,6 +42,7 @@ TARGET_CONFIG_DIR="$JSKIT_TARGET_ROOT/.jskit/config"
 WORKTREE_CONFIG_DIR="$JSKIT_WORKTREE_ROOT/.jskit/config"
 SIBLING_ROOT="$JSKIT_SESSION_ROOT/sibling-repos"
 SIBLING_MANIFEST="$SIBLING_ROOT/manifest.tsv"
+LINK_LOCAL_COMPANION_REPOS=("json-rest-schema" "json-rest-stores")
 
 copy_target_config() {
   if [ ! -d "$TARGET_CONFIG_DIR" ]; then
@@ -129,6 +130,65 @@ sibling_source_for() {
   return 1
 }
 
+declares_package() {
+  local package_name="$1"
+  node -e '
+const fs = require("node:fs");
+const packageJsonPath = process.argv[1];
+const packageName = process.argv[2];
+const sections = ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"];
+const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
+process.exit(sections.some((section) => Object.prototype.hasOwnProperty.call(packageJson[section] || {}, packageName)) ? 0 : 1);
+' "$JSKIT_WORKTREE_ROOT/package.json" "$package_name"
+}
+
+manifest_includes_sibling() {
+  local name="$1"
+  [ -f "$SIBLING_MANIFEST.tmp" ] || return 1
+  awk -F '\t' -v name="$name" '$1 == name { found = 1 } END { exit found ? 0 : 1 }' "$SIBLING_MANIFEST.tmp"
+}
+
+companion_source_for() {
+  local name="$1"
+  local jskit_source="$2"
+  local configured_source
+  configured_source="$(sibling_source_for "$name" || true)"
+  if [ -n "$configured_source" ]; then
+    printf '%s\n' "$configured_source"
+    return 0
+  fi
+
+  if [ -n "$jskit_source" ]; then
+    local adjacent_source
+    adjacent_source="$(dirname "$jskit_source")/$name"
+    if git -C "$adjacent_source" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+      printf '%s\n' "$adjacent_source"
+      return 0
+    fi
+  fi
+
+  return 1
+}
+
+ensure_link_local_companions() {
+  local jskit_source="$1"
+  local companion
+  for companion in "${LINK_LOCAL_COMPANION_REPOS[@]}"; do
+    if ! declares_package "$companion"; then
+      continue
+    fi
+    if manifest_includes_sibling "$companion"; then
+      continue
+    fi
+    local companion_source
+    companion_source="$(companion_source_for "$companion" "$jskit_source" || true)"
+    if [ -z "$companion_source" ]; then
+      fail "The app declares $companion, but no development source was found. Set $(repo_env_prefix "$companion")_ROOT or $TARGET_CONFIG_DIR/devel_sibling_roots/$companion."
+    fi
+    clone_or_reuse_sibling "$companion" "$companion_source"
+  done
+}
+
 ensure_clean_local_source() {
   local name="$1"
   local source="$2"
@@ -147,19 +207,25 @@ clone_or_reuse_sibling() {
   local base_path="$SIBLING_ROOT/$name.base"
   local local_source=""
 
+  if manifest_includes_sibling "$name"; then
+    return
+  fi
+
   if ! [[ "$name" =~ ^[A-Za-z0-9._-]+$ ]]; then
     fail "Invalid sibling repo name '$name'. Use letters, numbers, dots, underscores, and hyphens."
   fi
 
   mkdir -p "$SIBLING_ROOT"
+  if git -C "$source_ref" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    local_source="$(cd "$source_ref" && pwd -P)"
+  fi
 
   if [ -e "$dest" ] && ! git -C "$dest" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     fail "Sibling destination exists but is not a git worktree: $dest"
   fi
 
   if [ ! -e "$dest" ]; then
-    if git -C "$source_ref" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-      local_source="$(cd "$source_ref" && pwd -P)"
+    if [ -n "$local_source" ]; then
       ensure_clean_local_source "$name" "$local_source"
       log "Cloning sibling $name from local source $local_source."
       git clone "$local_source" "$dest" >/dev/null
@@ -192,6 +258,7 @@ clone_or_reuse_sibling() {
   printf '%s\t%s\t%s\t%s\n' "$name" "$dest" "$base_commit" "$marker_path" >> "$SIBLING_MANIFEST.tmp"
 
   if [ "$name" = "jskit-ai" ]; then
+    ensure_link_local_companions "$local_source"
     mkdir -p "$WORKTREE_CONFIG_DIR"
     printf '%s\n' "$dest" > "$WORKTREE_CONFIG_DIR/devel_jskit_ai_root"
     log "Linking jskit-ai packages into the Studio session worktree."
@@ -219,4 +286,5 @@ for sibling in "${siblings[@]}"; do
 done
 
 mv "$SIBLING_MANIFEST.tmp" "$SIBLING_MANIFEST"
-log "Provisioned ${#siblings[@]} development sibling repo(s)."
+provisioned_count="$(awk 'END { print NR + 0 }' "$SIBLING_MANIFEST")"
+log "Provisioned $provisioned_count development sibling repo(s)."
