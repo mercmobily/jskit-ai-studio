@@ -71,6 +71,32 @@
       </v-card>
     </v-dialog>
 
+    <v-dialog v-model="rewindDialogOpen" max-width="34rem">
+      <v-card>
+        <v-card-title>Rewind session?</v-card-title>
+        <v-card-text>
+          <p class="mb-2">
+            Rewind to {{ rewindStepLabel }} and delete that step plus later JSKIT receipts and step artifacts.
+          </p>
+          <p v-if="rewindWillResetCycleHistory" class="mb-0">
+            This also removes all loop and rework history and returns the session to Cycle 001.
+          </p>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" @click="cancelRewindSession">Cancel</v-btn>
+          <v-btn
+            color="error"
+            variant="flat"
+            :loading="issueSessionBusy"
+            @click="confirmRewindSession"
+          >
+            Rewind
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
     <v-dialog v-model="diffDialogOpen" max-width="min(94vw, 72rem)">
       <v-card class="studio-issue-sessions__diff-dialog">
         <v-card-title class="studio-issue-sessions__diff-title">
@@ -178,6 +204,24 @@
               >
                 {{ activeStepDescription(step) }}
               </p>
+              <div
+                v-if="doneStepExpanded(step) && canRewindStep(step)"
+                class="studio-issue-sessions__done-actions"
+              >
+                <v-btn
+                  color="error"
+                  density="compact"
+                  size="small"
+                  variant="tonal"
+                  :disabled="issueSessionBusy"
+                  :prepend-icon="mdiUndoVariant"
+                  :title="`Rewind to ${rewindStepLabelFor(step)}`"
+                  :aria-label="`Rewind to ${rewindStepLabelFor(step)}`"
+                  @click="requestRewindStep(step)"
+                >
+                  Rewind here
+                </v-btn>
+              </div>
 
               <div v-if="step.id === displayCurrentStepId" class="studio-issue-sessions__step-action">
                 <v-alert
@@ -377,6 +421,18 @@
                       {{ manualCodexPromptButtonLabel }}
                     </v-btn>
                     <v-btn
+                      v-for="utilityAction in codexPromptUtilityActions"
+                      :key="utilityAction.id || utilityAction.label"
+                      color="primary"
+                      variant="tonal"
+                      :disabled="codexPromptUtilityActionDisabled"
+                      :loading="issueSessionBusy"
+                      :prepend-icon="mdiRobotOutline"
+                      @click="runCodexPromptUtilityAction(utilityAction)"
+                    >
+                      {{ utilityAction.label || "Ask Codex" }}
+                    </v-btn>
+                    <v-btn
                       v-if="diffUtilityAction"
                       color="primary"
                       variant="tonal"
@@ -407,6 +463,18 @@
                       @click="submitCurrentForm"
                     >
                       {{ currentActionButtonLabel }}
+                    </v-btn>
+                    <v-btn
+                      v-for="alternateAction in buttonAlternateActions"
+                      :key="alternateActionKey(alternateAction)"
+                      color="primary"
+                      variant="tonal"
+                      :disabled="alternateActionDisabled(alternateAction)"
+                      :loading="issueSessionBusy"
+                      :prepend-icon="mdiClose"
+                      @click="runAlternateAction(alternateAction)"
+                    >
+                      {{ alternateActionButtonLabel(alternateAction) }}
                     </v-btn>
                     <v-btn
                       v-if="activeStepControls.showGoNext"
@@ -651,7 +719,8 @@ import {
   mdiRepeat,
   mdiRobotOutline,
   mdiSend,
-  mdiSourceBranch
+  mdiSourceBranch,
+  mdiUndoVariant
 } from "@mdi/js";
 import CodexSessionTerminal from "@/components/studio/CodexSessionTerminal.vue";
 import AppTestLauncher from "@/components/studio/AppTestLauncher.vue";
@@ -701,6 +770,9 @@ const expandedDoneStepIds = ref({});
 const expandedFactKeys = ref({});
 const abandonDialogOpen = ref(false);
 const abandonSessionId = ref("");
+const rewindDialogOpen = ref(false);
+const rewindStepId = ref("");
+const rewindStepLabel = ref("");
 const diffDialogOpen = ref(false);
 const diffError = ref("");
 const diffLoading = ref(false);
@@ -744,6 +816,7 @@ const {
   maxOpenIssueSessions,
   runSelectedStep,
   patchIssueSession,
+  rewindSelectedSession,
   selectSession,
   selectedSession,
   selectedSessionId,
@@ -754,6 +827,17 @@ const {
 } = useIssueSessions();
 
 const REVIEW_DESLOP_MORE_FINDINGS = "Run another review/deslop pass. Ask the user which important findings they want fixed before editing, then fix only the findings the user selects.";
+const FIRST_REWINDABLE_STEP_ID = "dependencies_installed";
+const CYCLE_REWIND_TARGET_STEP_ID = "plan_made";
+const CYCLE_REWIND_STEP_IDS = new Set([
+  "plan_made",
+  "plan_executed",
+  "deep_ui_check_run",
+  "review_prompt_rendered",
+  "review_changes_accepted",
+  "automated_checks_run",
+  "user_check_completed"
+]);
 const TERMINAL_SNAPSHOT_SYNC_INTERVAL_MS = 500;
 const CODEX_RESULT_ERROR_CODES = new Set([
   "codex_result_marker_missing",
@@ -1029,6 +1113,15 @@ const appTestUtilityAction = computed(() => {
   return actions.find((action) => action?.kind === "app_test") || null;
 });
 
+const codexPromptUtilityActions = computed(() => {
+  const actions = selectedStepAction.value?.utilityActions || [];
+  return actions.filter((action) => action?.kind === "codex_prompt");
+});
+
+const codexPromptUtilityActionDisabled = computed(() => {
+  return selectedSessionTerminalBlocked.value || issueSessionBusy.value || activeStepCodexWorking.value;
+});
+
 const activeAlternateActions = computed(() => {
   const actions = selectedStepAction.value?.alternateActions || [];
   const errorCodes = new Set((selectedSession.value?.errors || []).map((error) => error?.code).filter(Boolean));
@@ -1053,6 +1146,20 @@ const secondaryTextAlternateActions = computed(() => {
     return action.presentation !== "exclusive" && !isReviewAgainAction(action);
   });
 });
+
+const buttonAlternateActions = computed(() => {
+  return activeAlternateActions.value.filter((action) => {
+    const inputType = String(action?.input?.type || "none").trim();
+    return inputType === "none" && !isReviewAgainAction(action);
+  });
+});
+
+function utilityActionPayload(action = {}) {
+  const submitOptions = action.submitOptions && typeof action.submitOptions === "object"
+    ? action.submitOptions
+    : {};
+  return { ...submitOptions };
+}
 
 const combinedDiff = computed(() => {
   const payload = diffPayload.value || {};
@@ -1344,6 +1451,9 @@ const selectedTerminalSnapshotSyncNeeded = computed(() => {
   if (isReviewDeslopStep.value && selectedCodexPromptAlreadyRequested.value) {
     return true;
   }
+  if (session.prompt && selectedCodexPromptAlreadyRequested.value) {
+    return true;
+  }
   if (selectedStepAction.value?.kind === "codex_prompt" && session.prompt) {
     return true;
   }
@@ -1433,8 +1543,12 @@ const currentActionButtonLabel = computed(() => {
 });
 
 const executeStepButtonLabel = computed(() => {
-  if (isCodexPromptInjection.value && !selectedCodexPromptAlreadyRequested.value) {
-    return manualCodexPromptButtonLabel.value;
+  if (
+    selectedStepAction.value?.kind === "codex_prompt" &&
+    selectedStepAutomationMode.value === "codex_prompt" &&
+    !selectedCodexPromptAlreadyRequested.value
+  ) {
+    return "Start task";
   }
   return currentActionButtonLabel.value || "Execute step";
 });
@@ -1558,6 +1672,10 @@ function alternateActionButtonLabel(action = {}) {
 }
 
 function alternateActionDisabled(action = {}) {
+  const inputType = String(action?.input?.type || "none").trim();
+  if (inputType === "none") {
+    return issueSessionBusy.value || activeStepCodexWorking.value;
+  }
   const value = alternateActionDraftValue(action).trim();
   return issueSessionBusy.value || (action.input?.required !== false && !value);
 }
@@ -1893,8 +2011,53 @@ function stepIsDone(step = {}) {
   return stepSourceIds(step).every((stepId) => completedStepIds.value.has(stepId));
 }
 
+function sourceStepDefinition(stepId = "") {
+  return (stepDefinitions.value || []).find((step) => step.id === stepId) || null;
+}
+
+function rewindStepIdFor(step = {}) {
+  const sourceIds = stepSourceIds(step);
+  if (sourceIds.includes(CYCLE_REWIND_TARGET_STEP_ID)) {
+    return CYCLE_REWIND_TARGET_STEP_ID;
+  }
+  if (sourceIds.some((stepId) => CYCLE_REWIND_STEP_IDS.has(stepId))) {
+    return "";
+  }
+  const targetStepId = sourceIds[0] || step.id || "";
+  const targetStep = sourceStepDefinition(targetStepId) || step;
+  const targetIndex = Number(targetStep.index);
+  const firstRewindableIndex = Number(sourceStepDefinition(FIRST_REWINDABLE_STEP_ID)?.index ?? -1);
+  if (!targetStepId || targetStepId === "session_created" || targetStepId === "worktree_created") {
+    return "";
+  }
+  if (firstRewindableIndex < 0 || !Number.isFinite(targetIndex) || targetIndex < firstRewindableIndex) {
+    return "";
+  }
+  return targetStepId;
+}
+
+function rewindStepLabelFor(step = {}) {
+  const targetStepId = rewindStepIdFor(step);
+  const targetStep = sourceStepDefinition(targetStepId) || step;
+  return targetStep?.label || targetStepId || "this step";
+}
+
+function canRewindStep(step = {}) {
+  const targetStepId = rewindStepIdFor(step);
+  return Boolean(
+    targetStepId &&
+    selectedSession.value &&
+    isOpenIssueSession(selectedSession.value) &&
+    stepIsDone(step) &&
+    step.id !== displayCurrentStepId.value &&
+    completedStepIds.value.has(targetStepId)
+  );
+}
+
 function canExpandDoneStep(step = {}) {
-  return stepIsDone(step) && step.id !== displayCurrentStepId.value && Boolean(activeStepDescription(step));
+  return stepIsDone(step) &&
+    step.id !== displayCurrentStepId.value &&
+    (Boolean(activeStepDescription(step)) || canRewindStep(step));
 }
 
 function doneStepExpanded(step = {}) {
@@ -1929,6 +2092,26 @@ const activeCycleInfo = computed(() => {
 
 const activeCycleReworkRequestText = computed(() => {
   return String(activeCycleInfo.value?.reworkRequest || "").trim();
+});
+
+const selectedSessionHasLoopHistory = computed(() => {
+  const activeCycle = String(selectedSession.value?.activeCycle || "").trim().replace(/^cycle_/u, "");
+  const cycles = Array.isArray(selectedSession.value?.cycles) ? selectedSession.value.cycles : [];
+  return Boolean(
+    (activeCycle && activeCycle !== "001") ||
+    cycles.some((cycle) => {
+      const cycleNumber = String(cycle?.cycle || "").trim().replace(/^cycle_/u, "");
+      return Boolean(
+        (cycleNumber && cycleNumber !== "001") ||
+        String(cycle?.reworkRequest || "").trim() ||
+        String(cycle?.userCheckResult || "").trim() === "failed"
+      );
+    })
+  );
+});
+
+const rewindWillResetCycleHistory = computed(() => {
+  return rewindStepId.value === CYCLE_REWIND_TARGET_STEP_ID && selectedSessionHasLoopHistory.value;
 });
 
 function stepIsRepeatable(step = {}) {
@@ -3023,23 +3206,33 @@ async function handleStepResponse(response, {
     await requestCodexPromptInjection(response);
   }
   if (response?.ok !== false && runAutomaticFollowUps) {
-    await runAutomaticStepHandlers(response);
+    await runAutomaticStepHandlers(response, {
+      allowPromptAutomation: true
+    });
   }
   return response;
 }
 
-async function runAutomaticStepHandlers(session = selectedSession.value) {
+async function runAutomaticStepHandlers(session = selectedSession.value, {
+  allowPromptAutomation = false
+} = {}) {
   if (
     autoStepStartSuppressedStepKey.value &&
     autoStepStartSuppressedStepKey.value === autoStartCodexPromptStepKey(session)
   ) {
     return;
   }
-  await autoSkipConditionalStep(session);
-  await autoRunImmediateSessionStep(session);
-  await autoInjectDetachedCodexPrompt(session);
-  await autoStartCodexOutputStep(session);
-  await autoStartCodexPromptStep(session);
+  await autoSkipConditionalStep(session, {
+    allowPromptAutomationAfterRun: allowPromptAutomation
+  });
+  await autoRunImmediateSessionStep(session, {
+    allowPromptAutomationAfterRun: allowPromptAutomation
+  });
+  if (allowPromptAutomation) {
+    await autoInjectDetachedCodexPrompt(session);
+    await autoStartCodexOutputStep(session);
+    await autoStartCodexPromptStep(session);
+  }
   await autoAdvanceFinishedCodexPrompt();
 }
 
@@ -3065,7 +3258,9 @@ function shouldAutoSkipConditionalStep(session = selectedSession.value) {
   );
 }
 
-async function autoSkipConditionalStep(session = selectedSession.value) {
+async function autoSkipConditionalStep(session = selectedSession.value, {
+  allowPromptAutomationAfterRun = false
+} = {}) {
   if (!shouldAutoSkipConditionalStep(session)) {
     return;
   }
@@ -3078,7 +3273,9 @@ async function autoSkipConditionalStep(session = selectedSession.value) {
     [key]: true
   };
   const response = await runSelectedStep();
-  await handleStepResponse(response);
+  await handleStepResponse(response, {
+    runAutomaticFollowUps: allowPromptAutomationAfterRun
+  });
 }
 
 function hasNoInput(action) {
@@ -3110,7 +3307,9 @@ function shouldAutoRunImmediateSessionStep(session = selectedSession.value) {
   );
 }
 
-async function autoRunImmediateSessionStep(session = selectedSession.value) {
+async function autoRunImmediateSessionStep(session = selectedSession.value, {
+  allowPromptAutomationAfterRun = false
+} = {}) {
   if (!shouldAutoRunImmediateSessionStep(session)) {
     return;
   }
@@ -3130,12 +3329,18 @@ async function autoRunImmediateSessionStep(session = selectedSession.value) {
       return;
     }
     await handleStepResponse(response, {
-      forcePromptInjection: Boolean(response?.prompt && response?.codex?.autoInject === true),
-      runAutomaticFollowUps: false
+      forcePromptInjection: Boolean(
+        allowPromptAutomationAfterRun &&
+        response?.prompt &&
+        response?.codex?.autoInject === true
+      ),
+      runAutomaticFollowUps: allowPromptAutomationAfterRun
     });
     return;
   }
-  await handleStepResponse(response);
+  await handleStepResponse(response, {
+    runAutomaticFollowUps: allowPromptAutomationAfterRun
+  });
 }
 
 async function runCodexOutputStep() {
@@ -3170,6 +3375,18 @@ async function runAlternateAction(action = {}) {
   const response = await runSelectedStep(alternateActionPayload(action));
   clearAlternateActionDraft(action);
   await handleStepResponse(response);
+}
+
+async function runCodexPromptUtilityAction(action = {}) {
+  if (codexPromptUtilityActionDisabled.value) {
+    return;
+  }
+  clearAutoStepStartSuppression();
+  const response = await runSelectedStep(utilityActionPayload(action));
+  await handleStepResponse(response, {
+    forcePromptInjection: true,
+    runAutomaticFollowUps: false
+  });
 }
 
 async function resolveReviewDeslopFindings() {
@@ -3220,7 +3437,12 @@ async function executeCurrentStep() {
     return;
   }
   clearAutoStepStartSuppression();
-  if (isCodexPromptInjection.value && !selectedCodexPromptAlreadyRequested.value && selectedSession.value?.prompt) {
+  if (
+    isCodexPromptInjection.value &&
+    !selectedCodexPromptAlreadyRequested.value &&
+    selectedSession.value?.prompt &&
+    selectedStepAction.value?.kind === "codex_prompt"
+  ) {
     await requestCodexPromptInjection();
     return;
   }
@@ -3260,6 +3482,38 @@ async function confirmAbandonSession() {
     forgetTerminalSession(abandonedSessionId);
   }
   cancelAbandonSession();
+}
+
+function requestRewindStep(step = {}) {
+  const targetStepId = rewindStepIdFor(step);
+  if (!targetStepId) {
+    return;
+  }
+  rewindStepId.value = targetStepId;
+  rewindStepLabel.value = rewindStepLabelFor(step);
+  rewindDialogOpen.value = true;
+}
+
+function cancelRewindSession() {
+  rewindDialogOpen.value = false;
+  rewindStepId.value = "";
+  rewindStepLabel.value = "";
+}
+
+async function confirmRewindSession() {
+  const rewoundSessionId = selectedSessionId.value;
+  const targetStepId = rewindStepId.value;
+  if (!rewoundSessionId || !targetStepId) {
+    cancelRewindSession();
+    return;
+  }
+  const response = await rewindSelectedSession(targetStepId);
+  if (response?.ok === false) {
+    return;
+  }
+  forgetTerminalSession(rewoundSessionId);
+  expandedDoneStepIds.value = {};
+  cancelRewindSession();
 }
 
 async function handleSessionStepTerminalFinished(event = {}) {
@@ -3997,6 +4251,14 @@ onBeforeUnmount(() => {
 
 .studio-issue-sessions__step--current .studio-issue-sessions__step-description {
   color: rgba(var(--v-theme-on-surface), 0.82);
+}
+
+.studio-issue-sessions__done-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.34rem;
 }
 
 .studio-issue-sessions__step-action {

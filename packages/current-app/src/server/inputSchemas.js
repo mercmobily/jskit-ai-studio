@@ -54,9 +54,21 @@ const codexAttachmentInputValidator = deepFreeze({
   mode: "patch"
 });
 
+const rewindIssueSessionInputValidator = deepFreeze({
+  schema: createSchema({
+    stepId: {
+      type: "string",
+      noTrim: false,
+      required: true
+    }
+  }),
+  mode: "patch"
+});
+
 export {
   codexAttachmentInputValidator,
   codexThreadInputValidator,
   currentAppQueryInputValidator,
+  rewindIssueSessionInputValidator,
   terminalInputValidator
 };

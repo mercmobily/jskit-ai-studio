@@ -2364,11 +2364,11 @@ test.describe("studio startup navigation", () => {
     await page.goto(`${BASE_URL}/home`);
     await expectSessionsRoute(page);
     await expect.poll(() => terminalStartCount).toBeGreaterThan(0);
-    await expect(page.getByRole("button", { name: "Get Codex to execute plan" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Start task" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Go to next step" })).toHaveCount(0);
   });
 
-  test("automatic Codex prompt request retries until the terminal accepts it", async ({ page }) => {
+  test("Start task Codex prompt request retries until the terminal accepts it", async ({ page }) => {
     let terminalStartCount = 0;
     const terminalInputs: Record<string, string[]> = {
       [planExecutionRejectSessionId]: []
@@ -2436,6 +2436,11 @@ test.describe("studio startup navigation", () => {
 
     await page.goto(`${BASE_URL}/home`);
     await expectSessionsRoute(page);
+    await expect(page.getByRole("button", { name: "Start task" })).toBeVisible();
+    await page.waitForTimeout(500);
+    expect(terminalInputs[planExecutionRejectSessionId].join(""))
+      .not.toContain("Execute the approved implementation plan.");
+    await page.getByRole("button", { name: "Start task" }).click();
     await expect.poll(() => terminalStartCount).toBeGreaterThan(1);
     await expect.poll(() => terminalInputs[planExecutionRejectSessionId].join(""))
       .toContain("Execute the approved implementation plan.");
@@ -2493,7 +2498,7 @@ test.describe("studio startup navigation", () => {
     await expect(page.getByText("Goal: Review/deslop")).toBeVisible();
   });
 
-  test("Deep UI prompt is injected without exposing prompt copy UI", async ({ page }) => {
+  test("Deep UI prompt waits for Start task without exposing prompt copy UI", async ({ page }) => {
     const codexSessions = await mockCodexPromptSessions(page, [
       deepUiPromptedSessionPayload
     ]);
@@ -2507,6 +2512,11 @@ test.describe("studio startup navigation", () => {
     await expect(deepUiStep).toContainText("Goal: Deep UI check run");
     await expect(page.getByRole("textbox", { name: "Prompt" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Copy Prompt" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Start task" })).toBeVisible();
+    await page.waitForTimeout(500);
+    expect(codexSessions.terminalInputs[deepUiPromptSessionId].join(""))
+      .not.toContain("Deep UI quality check prompt for this session.");
+    await page.getByRole("button", { name: "Start task" }).click();
     await expect.poll(() => codexSessions.terminalInputs[deepUiPromptSessionId].join(""))
       .toContain("Deep UI quality check prompt for this session.");
   });
@@ -2593,6 +2603,7 @@ test.describe("studio startup navigation", () => {
 
     await page.goto(`${BASE_URL}/home`);
     await expectSessionsRoute(page);
+    await page.getByRole("button", { name: "Start task" }).click();
     await expect.poll(() => terminalInputs[planExecutionRejectSessionId].join(""))
       .toContain("Execute the approved implementation plan.");
     await page.evaluate(({ output, sessionId }) => {
@@ -2745,7 +2756,7 @@ test.describe("studio startup navigation", () => {
       hasText: "Review/deslop"
     });
     await expect(reviewStep).toContainText("Done: Review/deslop");
-    await expect(reviewStep.getByRole("button", { name: "Run deslop" })).toBeVisible();
+    await expect(reviewStep.getByRole("button", { name: "Start task" })).toBeVisible();
   });
 
   test("failed user check shows rework notes form before returning to plan made", async ({ page }) => {
@@ -2910,6 +2921,116 @@ test.describe("studio startup navigation", () => {
     await page.goto(`${BASE_URL}/home`);
     await expectSessionsRoute(page);
     await expect(page.getByRole("button", { name: "New Session" })).toHaveCount(0);
+  });
+
+  test("rewinds from an expanded completed issue-session step", async ({ page }) => {
+    const sessionId = "2026-05-12_01-06-43";
+    const stepDefinitions = [
+      { id: "session_created", index: 0, label: "Session created", kind: "system", description: "Create the durable session directory." },
+      { id: "worktree_created", index: 1, label: "Worktree created", kind: "command", description: "Prepare the isolated session worktree." },
+      { id: "dependencies_installed", index: 2, label: "Dependencies installed", kind: "automatic", description: "Install dependencies in the session worktree." },
+      { id: "issue_prompt_rendered", index: 3, label: "Initial issue prompt", kind: "human_input", description: "Capture the developer request." },
+      { id: "issue_drafted", index: 4, label: "Issue drafted", kind: "codex_output", description: "Ask Codex to create the GitHub issue." },
+      { id: "issue_created", index: 5, label: "Issue created", kind: "automatic", description: "Create the GitHub issue." },
+      { id: "issue_details_gathered", index: 6, label: "Issue details gathered", kind: "codex_output", description: "Save confirmed issue details." },
+      { id: "plan_made", index: 7, label: "Plan made", kind: "codex_output", repeatable: true, repeatableGroupId: "rework_cycle", repeatableGroupLabel: "Rework cycle", description: "Ask Codex to create an implementation plan." },
+      { id: "plan_executed", index: 8, label: "Plan executed", kind: "codex_prompt", repeatable: true, repeatableGroupId: "rework_cycle", repeatableGroupLabel: "Rework cycle", description: "Send the plan to Codex for implementation." }
+    ];
+    let sessionPayload = {
+      ok: true,
+      sessionId,
+      activeCycle: "002",
+      cycles: [
+        { cycle: "001", label: "cycle_001", status: "failed", userCheckResult: "failed" },
+        { cycle: "002", label: "cycle_002", reworkRequest: "Fix the result.", status: "active", userCheckResult: "" }
+      ],
+      status: "running",
+      currentStep: "plan_executed",
+      completedSteps: [
+        "session_created",
+        "worktree_created",
+        "dependencies_installed",
+        "issue_prompt_rendered",
+        "issue_drafted",
+        "issue_created",
+        "issue_details_gathered",
+        "plan_made"
+      ],
+      stepDefinitions,
+      currentStepAction: {
+        buttonLabel: "Get Codex to execute plan",
+        input: { type: "none" },
+        kind: "codex_prompt",
+        stepId: "plan_executed"
+      },
+      codex: null,
+      prompt: "",
+      receipts: [],
+      issueTitle: "Add rewind",
+      issueText: "Add destructive rewind.",
+      issueUrl: "https://github.com/merc/example-target-app/issues/127",
+      worktree: sessionWorktreePath(sessionId),
+      worktreeReady: true
+    };
+    await page.route("**/api/studio/current-app", async (route) => {
+      await route.fulfill({ contentType: "application/json", body: JSON.stringify(currentAppPayload) });
+    });
+    await page.route("**/api/studio/current-app/issue-sessions", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          limits: { maxOpenSessions: 3, openSessionCount: 1 },
+          ok: true,
+          sessions: [sessionPayload],
+          stepDefinitions
+        })
+      });
+    });
+    await page.route(`**/api/studio/current-app/issue-sessions/${sessionId}`, async (route) => {
+      await route.fulfill({ contentType: "application/json", body: JSON.stringify(sessionPayload) });
+    });
+    await page.route(`**/api/studio/current-app/issue-sessions/${sessionId}/rewind`, async (route) => {
+      const requestBody = route.request().postDataJSON();
+      sessionPayload = {
+        ...sessionPayload,
+        activeCycle: "001",
+        cycles: [{ cycle: "001", label: "cycle_001", status: "active", userCheckResult: "" }],
+        currentStep: requestBody.stepId,
+        completedSteps: [
+          "session_created",
+          "worktree_created",
+          "dependencies_installed",
+          "issue_prompt_rendered",
+          "issue_drafted",
+          "issue_created",
+          "issue_details_gathered"
+        ],
+        currentStepAction: {
+          buttonLabel: "Save plan",
+          input: { name: "plan", type: "text" },
+          kind: "codex_output",
+          stepId: "plan_made"
+        }
+      };
+      await route.fulfill({ contentType: "application/json", body: JSON.stringify(sessionPayload) });
+    });
+
+    await page.goto(`${BASE_URL}/home`);
+    await expectSessionsRoute(page);
+
+    const planStep = page.locator(".studio-issue-sessions__step").filter({ hasText: "Plan made" });
+    await expect(planStep.getByRole("button", { name: /^Rewind to /u })).toHaveCount(0);
+    await planStep.getByRole("button", { name: "Toggle completed step details" }).click();
+    await expect(planStep.getByRole("button", { name: "Rewind to Plan made" })).toBeVisible();
+
+    const worktreeStep = page.locator(".studio-issue-sessions__step").filter({ hasText: "Worktree created" });
+    await worktreeStep.getByRole("button", { name: "Toggle completed step details" }).click();
+    await expect(worktreeStep.getByRole("button", { name: /^Rewind to /u })).toHaveCount(0);
+
+    await planStep.getByRole("button", { name: "Rewind to Plan made" }).click();
+    await expect(page.getByRole("dialog").getByText("all loop and rework history")).toBeVisible();
+    await page.getByRole("dialog").getByRole("button", { name: "Rewind" }).click();
+    await expect(page.locator(".studio-issue-sessions__step").filter({ hasText: "Goal: Plan made" })).toBeVisible();
   });
 
   test("abandoning a session closes its terminal and removes it from the visible list", async ({ page }) => {

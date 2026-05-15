@@ -2,7 +2,8 @@ import { resolveScopedApiBasePath, normalizeSurfaceId } from "@jskit-ai/kernel/s
 import {
   codexAttachmentInputValidator,
   codexThreadInputValidator,
-  currentAppQueryInputValidator
+  currentAppQueryInputValidator,
+  rewindIssueSessionInputValidator
 } from "./inputSchemas.js";
 import { ACTION_READ_CURRENT_APP } from "./actions.js";
 import {
@@ -197,6 +198,30 @@ function registerRoutes(
         return;
       }
       const response = await getCurrentAppService(app).abandonIssueSession(request.params.sessionId);
+      reply.code(sessionStatusCode(response, { missingStatus: 404 })).send(response);
+    }
+  );
+
+  router.register(
+    "POST",
+    `${routeBase}/issue-sessions/:sessionId/rewind`,
+    {
+      auth: "public",
+      surface: normalizedRouteSurface,
+      meta: {
+        tags: ["studio", "issue-sessions"],
+        summary: "Rewind a JSKIT issue session to a completed step."
+      },
+      body: rewindIssueSessionInputValidator
+    },
+    async function (request, reply) {
+      if (!requireLocalCurrentAppRequest(request, reply)) {
+        return;
+      }
+      const response = await getCurrentAppService(app).rewindIssueSession(
+        request.params.sessionId,
+        requestBodyObject(request)
+      );
       reply.code(sessionStatusCode(response, { missingStatus: 404 })).send(response);
     }
   );

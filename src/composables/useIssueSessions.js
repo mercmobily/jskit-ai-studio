@@ -4,6 +4,7 @@ import {
   createIssueSession,
   listIssueSessions,
   readIssueSession,
+  rewindIssueSession,
   runIssueSessionStep
 } from "@/lib/studioApi.js";
 import {
@@ -251,6 +252,33 @@ function useIssueSessions() {
     }
   }
 
+  async function rewindSelectedSession(stepId) {
+    if (!selectedSessionId.value) {
+      return null;
+    }
+    issueSessionBusy.value = true;
+    issueSessionsError.value = "";
+    try {
+      const response = await rewindIssueSession(selectedSessionId.value, stepId);
+      selectedSession.value = response;
+      rememberContract(response);
+      if (response?.ok === false) {
+        issueSessionsError.value = response.errors?.[0]?.message || "Session rewind failed.";
+      } else {
+        resetStepInputValues(response);
+      }
+      const listResponse = await listIssueSessions();
+      rememberContract(listResponse);
+      applySessionList(listResponse?.sessions || []);
+      return response;
+    } catch (rewindError) {
+      issueSessionsError.value = errorMessage(rewindError, "Session rewind failed.");
+      return null;
+    } finally {
+      issueSessionBusy.value = false;
+    }
+  }
+
   return {
     abandonSelectedSession,
     activeIssueSessionCount,
@@ -266,6 +294,7 @@ function useIssueSessions() {
     loadIssueSessions,
     patchIssueSession,
     runSelectedStep,
+    rewindSelectedSession,
     selectSession,
     selectedSession,
     selectedSessionId,

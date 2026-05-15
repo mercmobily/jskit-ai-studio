@@ -112,6 +112,12 @@ async function abandonIssueSession(sessionId) {
   return studioHttpClient.post(`${ISSUE_SESSIONS_ENDPOINT}/${encodeURIComponent(sessionId)}/abandon`, {});
 }
 
+async function rewindIssueSession(sessionId, stepId) {
+  return studioHttpClient.post(`${ISSUE_SESSIONS_ENDPOINT}/${encodeURIComponent(sessionId)}/rewind`, {
+    stepId
+  });
+}
+
 function issueSessionCodexTerminalEndpoint(sessionId, terminalSessionId = "") {
   const base = `${ISSUE_SESSIONS_ENDPOINT}/${encodeURIComponent(sessionId)}/codex-terminal`;
   return terminalSessionId ? `${base}/${encodeURIComponent(terminalSessionId)}` : base;
@@ -289,6 +295,7 @@ export {
   readIssueSessionDiff,
   readTargetAppStatus,
   resolveStudioGate,
+  rewindIssueSession,
   runIssueSessionStep,
   saveIssueSessionCodexThread,
   startCurrentAppTestTerminal,

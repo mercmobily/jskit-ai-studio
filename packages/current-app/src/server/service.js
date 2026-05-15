@@ -14,6 +14,7 @@ import {
   inspectSessionDiff,
   inspectSessionDetails,
   listSessions,
+  rewindSession,
   runSessionStep
 } from "@jskit-ai/jskit-cli/server";
 import {
@@ -1127,6 +1128,20 @@ function createService({ appRoot = "" } = {}) {
         sessionId
       });
       if (String(response?.status || "") === "abandoned") {
+        await closeTerminalSessionsForNamespace(terminalNamespace(sessionId));
+        await closeTerminalSessionsForNamespace(stepTerminalNamespace(sessionId));
+        await closeTerminalSessionsForNamespace(appTestTerminalNamespace(sessionId));
+      }
+      return response;
+    },
+
+    async rewindIssueSession(sessionId, input = {}) {
+      const response = await rewindSession({
+        targetRoot: inspectionRoot,
+        sessionId,
+        stepId: input?.stepId
+      });
+      if (response?.ok !== false) {
         await closeTerminalSessionsForNamespace(terminalNamespace(sessionId));
         await closeTerminalSessionsForNamespace(stepTerminalNamespace(sessionId));
         await closeTerminalSessionsForNamespace(appTestTerminalNamespace(sessionId));

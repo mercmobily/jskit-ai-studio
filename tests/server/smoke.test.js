@@ -259,6 +259,19 @@ test("Studio current-app API exposes JSKIT issue sessions from target filesystem
       assert.equal(prompted.json().codex.responseContract.fields[1].field, "issue");
       assert.equal(prompted.json().codex.mode, "inject_prompt");
 
+      const rewound = await app.inject({
+        method: "POST",
+        url: `/api/studio/current-app/issue-sessions/${createdPayload.sessionId}/rewind`,
+        payload: {
+          stepId: "dependencies_installed"
+        }
+      });
+      assert.equal(rewound.statusCode, 200);
+      assert.equal(rewound.json().ok, true);
+      assert.equal(rewound.json().currentStep, "dependencies_installed");
+      assert.equal(rewound.json().dependencyInstall.installed, false);
+      assert.deepEqual(rewound.json().completedSteps, ["session_created", "worktree_created"]);
+
       const abandoned = await app.inject({
         method: "POST",
         url: `/api/studio/current-app/issue-sessions/${createdPayload.sessionId}/abandon`,
