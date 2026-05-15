@@ -192,6 +192,8 @@ clone_or_reuse_sibling() {
   printf '%s\t%s\t%s\t%s\n' "$name" "$dest" "$base_commit" "$marker_path" >> "$SIBLING_MANIFEST.tmp"
 
   if [ "$name" = "jskit-ai" ]; then
+    mkdir -p "$WORKTREE_CONFIG_DIR"
+    printf '%s\n' "$dest" > "$WORKTREE_CONFIG_DIR/devel_jskit_ai_root"
     log "Linking jskit-ai packages into the Studio session worktree."
     (cd "$JSKIT_WORKTREE_ROOT" && npx --no-install jskit app link-local-packages --repo-root "$dest")
   fi
