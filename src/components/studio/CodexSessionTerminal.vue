@@ -3,23 +3,12 @@
     rounded="lg"
     class="codex-terminal"
     :class="{
-      'codex-terminal--desktop-actionless': !showPromptButton,
+      'codex-terminal--desktop-actionless': true,
       'codex-terminal--focused': terminalFocused
     }"
   >
     <div class="codex-terminal__bar">
       <div class="codex-terminal__actions">
-        <v-btn
-          v-if="showPromptButton"
-          :disabled="!canUseTerminal || terminalStarting"
-          :loading="injectingPrompt"
-          :prepend-icon="mdiSend"
-          size="small"
-          variant="tonal"
-          @click="injectPrompt"
-        >
-          {{ promptActionLabel }}
-        </v-btn>
         <v-btn
           :icon="expanded ? mdiChevronDown : mdiChevronUp"
           class="codex-terminal__collapse"
@@ -32,9 +21,13 @@
 
     <v-expand-transition>
       <div v-show="expanded" class="codex-terminal__body">
-        <v-alert v-if="terminalError" type="error" variant="tonal" density="compact" class="mb-2">
-          {{ terminalError }}
-        </v-alert>
+        <StudioErrorNotice
+          v-if="terminalError"
+          title="Codex terminal needs attention"
+          :error="terminalError"
+          compact
+          class="mb-2"
+        />
 
         <div
           class="codex-terminal__stage"
@@ -114,9 +107,9 @@ import {
   mdiChevronDown,
   mdiChevronUp,
   mdiPaperclip,
-  mdiRestart,
-  mdiSend
+  mdiRestart
 } from "@mdi/js";
+import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
 import {
   closeIssueSessionCodexTerminal,
   issueSessionCodexTerminalWebSocketUrl,
@@ -148,10 +141,6 @@ const props = defineProps({
   promptOverride: {
     type: String,
     default: ""
-  },
-  showPromptAction: {
-    type: Boolean,
-    default: true
   }
 });
 const emit = defineEmits(["input", "output", "prompt-injected", "session-update"]);
@@ -225,8 +214,6 @@ const codexPrompt = computed(() => {
   return promptField ? String(props.session?.[promptField] || "") : "";
 });
 const manualPromptInjectionRequestKey = computed(() => String(props.promptInjectionRequestKey || ""));
-const showPromptButton = computed(() => Boolean(codexPrompt.value && props.showPromptAction));
-const promptActionLabel = computed(() => autoPromptInjected.value ? "Re-inject Prompt" : "Inject Prompt");
 const terminalExited = computed(() => terminalStatus.value === "exited");
 const attachmentDragActive = computed(() => attachmentDragDepth.value > 0);
 const showTerminalStartPanel = computed(() => (

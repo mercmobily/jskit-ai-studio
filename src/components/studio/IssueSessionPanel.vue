@@ -1,8 +1,12 @@
 <template>
   <v-sheet rounded="lg" class="studio-issue-sessions studio-screen__panel">
-    <v-alert v-if="issueSessionsError" type="error" variant="tonal" class="mb-3">
-      {{ issueSessionsError }}
-    </v-alert>
+    <StudioErrorNotice
+      v-if="issueSessionsError"
+      title="Issue sessions could not load"
+      :error="issueSessionsError"
+      compact
+      class="mb-3"
+    />
 
     <div v-if="issueSessions.length || canCreateIssueSession" class="studio-issue-sessions__strip">
       <div class="studio-issue-sessions__strip-tabs">
@@ -43,7 +47,17 @@
           New Session
         </v-chip>
       </div>
-      <AppTestLauncher class="studio-issue-sessions__strip-action" />
+      <div v-if="canTestSelectedSessionWorktree" class="studio-issue-sessions__strip-action">
+        <v-btn
+          color="primary"
+          variant="tonal"
+          size="small"
+          :prepend-icon="mdiPlayCircleOutline"
+          @click="launchSessionAppTest"
+        >
+          Test worktree
+        </v-btn>
+      </div>
     </div>
 
     <v-sheet v-else-if="!issueSessionsLoading" rounded="lg" border class="studio-issue-sessions__empty">
@@ -115,9 +129,13 @@
           class="studio-issue-sessions__diff-body"
           @click="handleDiffBodyClick"
         >
-          <v-alert v-if="diffError" type="error" variant="tonal" class="mb-3">
-            {{ diffError }}
-          </v-alert>
+          <StudioErrorNotice
+            v-if="diffError"
+            title="Diff inspection failed"
+            :error="diffError"
+            compact
+            class="mb-3"
+          />
           <v-progress-linear v-if="diffLoading" color="primary" indeterminate class="mb-3" />
           <pre v-if="diffPayload?.gitStatus" class="studio-issue-sessions__diff-status">{{ diffPayload.gitStatus }}</pre>
           <!-- eslint-disable-next-line vue/no-v-html -- Diff2Html escapes git diff content before rendering. -->
@@ -232,6 +250,12 @@
                 >
                   {{ currentStepActionNotice.text }}
                 </v-alert>
+
+                <StudioErrorNotice
+                  v-for="error in selectedSessionErrors"
+                  :key="error.code || error.message"
+                  :error="error"
+                />
 
                 <v-textarea
                   v-if="selectedSession.prompt && !isCodexPromptInjection"
@@ -356,15 +380,6 @@
                 </div>
 
                 <div v-else-if="isChoiceStep" class="studio-issue-sessions__choice-row">
-                  <v-btn
-                    v-if="appTestUtilityAction"
-                    color="primary"
-                    variant="tonal"
-                    :prepend-icon="mdiPlayCircleOutline"
-                    @click="launchSessionAppTest"
-                  >
-                    {{ appTestUtilityAction.label || "Test app" }}
-                  </v-btn>
                   <v-btn
                     v-for="option in selectedStepInput.options || []"
                     :key="option.value"
@@ -539,20 +554,6 @@
             </div>
           </div>
         </div>
-
-        <v-alert
-          v-for="error in selectedSession.errors || []"
-          :key="error.code"
-          type="error"
-          variant="tonal"
-          class="mb-2"
-        >
-          <strong>{{ error.code }}</strong>: {{ error.message }}
-          <template v-if="error.repairCommand">
-            <br>
-            <code>{{ error.repairCommand }}</code>
-          </template>
-        </v-alert>
       </section>
 
       <aside class="studio-issue-sessions__side">
@@ -565,6 +566,31 @@
           Three active Codex terminals are already open. Finish or abandon one before opening another.
         </v-alert>
 
+        <div v-if="showSessionTerminalSwitcher" class="studio-issue-sessions__terminal-toolbar">
+          <span>Terminal</span>
+          <v-btn-toggle
+            v-model="activeSessionTerminalView"
+            mandatory
+            density="compact"
+            variant="tonal"
+          >
+            <v-btn
+              value="codex"
+              size="small"
+              :prepend-icon="mdiRobotOutline"
+            >
+              Codex
+            </v-btn>
+            <v-btn
+              value="app_test"
+              size="small"
+              :prepend-icon="mdiPlayCircleOutline"
+            >
+              App test
+            </v-btn>
+          </v-btn-toggle>
+        </div>
+
         <div class="studio-issue-sessions__terminal-stack">
           <IssueSessionStepTerminal
             v-if="selectedSessionNeedsSetupTerminal"
@@ -574,13 +600,12 @@
           />
           <CodexSessionTerminal
             v-for="terminalSession in terminalSessions"
-            v-show="terminalSession.sessionId === selectedSessionId"
+            v-show="terminalSession.sessionId === selectedSessionId && activeSessionTerminalView === 'codex'"
             :key="terminalSession.sessionId"
             :session="terminalSession"
             :prompt-override="codexPromptOverrideForSession(terminalSession)"
             :prompt-injection-request-key="promptInjectionRequestKeyFor(terminalSession)"
-            :show-prompt-action="!shouldUseManualIssueSessionCodexPrompt(terminalSession)"
-            :visible="terminalSession.sessionId === selectedSessionId"
+            :visible="terminalSession.sessionId === selectedSessionId && activeSessionTerminalView === 'codex'"
             @input="recordCodexTerminalInput(terminalSession.sessionId, $event)"
             @output="recordCodexTerminalOutput(terminalSession.sessionId, $event)"
             @prompt-injected="recordCodexPromptInjected(terminalSession.sessionId, $event)"
@@ -588,12 +613,13 @@
           />
           <AppTestTerminal
             v-if="sessionAppTestVisible"
+            v-show="activeSessionTerminalView === 'app_test'"
             ref="sessionAppTestTerminalRef"
             scope="session"
             title="Test session app"
             :session="selectedSession"
-            :visible="sessionAppTestVisible"
-            @closed="sessionAppTestVisible = false"
+            :visible="sessionAppTestVisible && activeSessionTerminalView === 'app_test'"
+            @closed="handleSessionAppTestClosed"
           />
         </div>
 
@@ -723,9 +749,9 @@ import {
   mdiUndoVariant
 } from "@mdi/js";
 import CodexSessionTerminal from "@/components/studio/CodexSessionTerminal.vue";
-import AppTestLauncher from "@/components/studio/AppTestLauncher.vue";
 import AppTestTerminal from "@/components/studio/AppTestTerminal.vue";
 import IssueSessionStepTerminal from "@/components/studio/IssueSessionStepTerminal.vue";
+import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
 import { useIssueSessions } from "@/composables/useIssueSessions.js";
 import {
   extractMarkedOutputBlocks,
@@ -780,6 +806,8 @@ const diffPayload = ref(null);
 const diffBodyElement = ref(null);
 const sessionAppTestTerminalRef = ref(null);
 const sessionAppTestVisible = ref(false);
+const activeSessionTerminalView = ref("codex");
+const fakeSessionErrorEnabled = ref(readFakeSessionErrorEnabled());
 const terminalSessionById = ref({});
 const promptInjectionRequestBySessionId = ref({});
 const promptInjectionSignatureBySessionId = ref({});
@@ -827,6 +855,7 @@ const {
 } = useIssueSessions();
 
 const REVIEW_DESLOP_MORE_FINDINGS = "Run another review/deslop pass. Ask the user which important findings they want fixed before editing, then fix only the findings the user selects.";
+const FAKE_SESSION_ERROR_STORAGE_KEY = "jskit:studio:fake-session-error";
 const FIRST_REWINDABLE_STEP_ID = "dependencies_installed";
 const CYCLE_REWIND_TARGET_STEP_ID = "plan_made";
 const CYCLE_REWIND_STEP_IDS = new Set([
@@ -867,6 +896,26 @@ const sessionFactItems = computed(() => {
       ...fact,
       icon: sessionFactIcon(fact.icon)
     }));
+});
+
+const selectedSessionErrors = computed(() => {
+  const errors = Array.isArray(selectedSession.value?.errors) ? selectedSession.value.errors : [];
+  if (!fakeSessionErrorEnabled.value || !selectedSession.value?.sessionId) {
+    return errors;
+  }
+  return [
+    ...errors,
+    {
+      code: "studio_fake_error_preview",
+      details: [
+        "This is a temporary local UI preview error.",
+        "It is controlled by localStorage and does not mutate the JSKIT session."
+      ].join("\n"),
+      message: "This manufactured error lets you inspect the session error presentation without breaking a real workflow.",
+      repairCommand: `localStorage.removeItem("${FAKE_SESSION_ERROR_STORAGE_KEY}"); location.reload();`,
+      title: "Preview error styling"
+    }
+  ];
 });
 
 const completedStepIds = computed(() => new Set(selectedSession.value?.completedSteps || []));
@@ -1108,9 +1157,13 @@ const diffUtilityAction = computed(() => {
   return actions.find((action) => action?.kind === "diff") || null;
 });
 
-const appTestUtilityAction = computed(() => {
-  const actions = selectedStepAction.value?.utilityActions || [];
-  return actions.find((action) => action?.kind === "app_test") || null;
+const canTestSelectedSessionWorktree = computed(() => {
+  const session = selectedSession.value || {};
+  return Boolean(session.sessionId && session.worktreeReady === true && !isClosedIssueSession(session));
+});
+
+const showSessionTerminalSwitcher = computed(() => {
+  return Boolean(sessionAppTestVisible.value && canTestSelectedSessionWorktree.value);
 });
 
 const codexPromptUtilityActions = computed(() => {
@@ -1555,6 +1608,13 @@ const executeStepButtonLabel = computed(() => {
 
 function shortSessionId(sessionId) {
   return shortIssueSessionId(sessionId);
+}
+
+function readFakeSessionErrorEnabled() {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  return window.localStorage.getItem(FAKE_SESSION_ERROR_STORAGE_KEY) === "1";
 }
 
 function sessionFactIcon(icon) {
@@ -2239,12 +2299,18 @@ async function copyText(value, label) {
 }
 
 async function launchSessionAppTest() {
-  if (!selectedSession.value?.sessionId) {
+  if (!canTestSelectedSessionWorktree.value) {
     return;
   }
+  activeSessionTerminalView.value = "app_test";
   sessionAppTestVisible.value = true;
   await nextTick();
   await sessionAppTestTerminalRef.value?.start?.();
+}
+
+function handleSessionAppTestClosed() {
+  sessionAppTestVisible.value = false;
+  activeSessionTerminalView.value = "codex";
 }
 
 function runChoiceStep(value) {
@@ -3593,6 +3659,7 @@ async function requestCodexPromptInjection(sessionOverride = null) {
       : "No active session is selected.";
     return;
   }
+  activeSessionTerminalView.value = "codex";
   rememberTerminalSession(session);
   await nextTick();
   promptInjectionRequestBySessionId.value = {
@@ -3642,10 +3709,12 @@ watch(selectedSession, (session) => {
 
 watch(selectedSessionId, () => {
   if (!sessionAppTestVisible.value) {
+    activeSessionTerminalView.value = "codex";
     return;
   }
   void sessionAppTestTerminalRef.value?.closeTerminal?.();
   sessionAppTestVisible.value = false;
+  activeSessionTerminalView.value = "codex";
 });
 
 watch(issueSessionBusy, (busy) => {
@@ -3838,7 +3907,10 @@ onBeforeUnmount(() => {
 }
 
 .studio-issue-sessions__strip-action {
+  align-items: center;
+  display: flex;
   flex: 0 0 auto;
+  min-height: 2.25rem;
 }
 
 .studio-issue-sessions__tab {
@@ -3998,6 +4070,22 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 0.75rem;
   min-width: 0;
+}
+
+.studio-issue-sessions__terminal-toolbar {
+  align-items: center;
+  display: flex;
+  gap: 0.65rem;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.studio-issue-sessions__terminal-toolbar > span {
+  color: rgba(var(--v-theme-on-surface), 0.68);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
 }
 
 .studio-issue-sessions__facts {

@@ -49,9 +49,13 @@
       </div>
     </div>
 
-    <v-alert v-if="terminalError" type="error" variant="tonal" density="compact" class="mb-2">
-      {{ terminalError }}
-    </v-alert>
+    <StudioErrorNotice
+      v-if="terminalError"
+      title="App test terminal needs attention"
+      :error="terminalError"
+      compact
+      class="mb-2"
+    />
 
     <div ref="terminalHost" class="app-test-terminal__host" />
 
@@ -80,6 +84,7 @@ import {
   startCurrentAppTestTerminal,
   startIssueSessionAppTestTerminal
 } from "@/lib/studioApi.js";
+import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
 import "@xterm/xterm/css/xterm.css";
 
 const props = defineProps({
