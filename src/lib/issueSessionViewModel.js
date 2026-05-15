@@ -92,12 +92,20 @@ function hasIssueSessionCodexPrompt(session = {}) {
   return session?.codex?.mode === "inject_prompt" && Boolean(issueSessionCodexPrompt(session));
 }
 
+function issueSessionCodexPromptShouldSend(session = {}) {
+  return session?.codex?.sendPrompt === true || session?.codex?.autoInject === true;
+}
+
+function shouldSendIssueSessionCodexPrompt(session = {}) {
+  return hasIssueSessionCodexPrompt(session) && issueSessionCodexPromptShouldSend(session);
+}
+
 function shouldAutoInjectIssueSessionCodexPrompt(session = {}) {
-  return hasIssueSessionCodexPrompt(session) && session?.codex?.autoInject === true;
+  return shouldSendIssueSessionCodexPrompt(session);
 }
 
 function shouldUseManualIssueSessionCodexPrompt(session = {}) {
-  return hasIssueSessionCodexPrompt(session) && session?.codex?.autoInject !== true;
+  return hasIssueSessionCodexPrompt(session) && !issueSessionCodexPromptShouldSend(session);
 }
 
 function issueSessionCodexPromptActionLabel(session = {}) {
@@ -251,6 +259,7 @@ export {
   issueSessionTitleFromIssueText,
   parseGithubSessionLink,
   shouldAutoInjectIssueSessionCodexPrompt,
+  shouldSendIssueSessionCodexPrompt,
   shouldUseManualIssueSessionCodexPrompt,
   shortIssueSessionId
 };

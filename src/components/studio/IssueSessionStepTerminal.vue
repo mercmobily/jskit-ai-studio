@@ -35,9 +35,14 @@
       </div>
     </div>
 
-    <v-alert v-if="terminalError" type="error" variant="tonal" density="compact" class="mb-2">
-      {{ terminalError }}
-    </v-alert>
+    <StudioErrorNotice
+      v-if="terminalError"
+      title="Session setup blocked"
+      :message="terminalErrorMessage"
+      :details="terminalErrorDetails"
+      compact
+      class="mb-2"
+    />
 
     <div ref="terminalHost" class="session-step-terminal__host" />
 
@@ -59,6 +64,7 @@ import {
   issueSessionStepTerminalWebSocketUrl,
   startIssueSessionStepTerminal
 } from "@/lib/studioApi.js";
+import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
 import "@xterm/xterm/css/xterm.css";
 
 const props = defineProps({
@@ -104,6 +110,10 @@ const canRunSetupTerminal = computed(() => (
   props.session?.currentStep === "dependencies_installed"
 ));
 const terminalExited = computed(() => terminalStatus.value === "exited");
+const terminalErrorMessage = computed(() => formatSetupTerminalError(terminalError.value));
+const terminalErrorDetails = computed(() => (
+  terminalError.value && terminalErrorMessage.value !== terminalError.value ? terminalError.value : ""
+));
 const canRetry = computed(() => canRunSetupTerminal.value && (
   Boolean(terminalError.value) ||
   terminalClosedByUser.value ||
@@ -209,6 +219,35 @@ function appendTerminalOutput(chunk) {
   }
 }
 
+function formatSetupTerminalError(error) {
+  const rawError = String(error || "").trim();
+  if (!rawError) {
+    return "";
+  }
+  const lines = rawError
+    .replace(/\r/gu, "\n")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const provisioningLine = lines.find((line) => line.includes("[devel-provision-jskit-ai-studio-session] ERROR:")) || "";
+  const provisioningMessage = provisioningLine
+    ? provisioningLine.slice(provisioningLine.indexOf("ERROR:") + "ERROR:".length).trim()
+    : "";
+  const cleanSourceMatch = provisioningMessage.match(
+    /^Session provisioning needs a clean sibling source for ([^.]+)\. The source checkout at (.+?) has uncommitted changes,/u
+  );
+  if (cleanSourceMatch) {
+    return `Session setup is blocked because ${cleanSourceMatch[1]} has uncommitted changes at ${cleanSourceMatch[2]}. Commit or stash that sibling repo, then click Retry.`;
+  }
+  const oldDirtySourceMatch = provisioningMessage.match(
+    /^Source sibling (.+?) at (.+?) has uncommitted changes\./u
+  );
+  if (oldDirtySourceMatch) {
+    return `Session setup is blocked because ${oldDirtySourceMatch[1]} has uncommitted changes at ${oldDirtySourceMatch[2]}. Commit or stash that sibling repo, then click Retry.`;
+  }
+  return provisioningMessage || rawError;
+}
+
 function closeTerminalSocket() {
   const socket = terminalSocket;
   terminalSocket = null;
@@ -218,13 +257,14 @@ function closeTerminalSocket() {
   }
 }
 
-function scheduleFinished(exitCode) {
+function scheduleFinished(exitCode, closeError = "") {
   if (!terminalSessionId.value || finishedEmittedForTerminalId === terminalSessionId.value) {
     return;
   }
   finishedEmittedForTerminalId = terminalSessionId.value;
   window.setTimeout(() => {
     emit("finished", {
+      closeError: String(closeError || terminalError.value || ""),
       exitCode,
       sessionId: sessionId.value
     });
@@ -248,7 +288,7 @@ function handleTerminalSocketMessage(rawMessage) {
     terminalError.value = String(session.closeError || terminalError.value || "");
     writeTerminalOutput(session.output || "");
     if (session.status === "exited") {
-      scheduleFinished(session.exitCode);
+      scheduleFinished(session.exitCode, session.closeError);
     }
     return;
   }
@@ -263,7 +303,7 @@ function handleTerminalSocketMessage(rawMessage) {
     terminalExitCode.value = message.status === "exited" ? message.exitCode ?? null : null;
     terminalError.value = String(message.closeError || terminalError.value || "");
     if (message.status === "exited") {
-      scheduleFinished(message.exitCode);
+      scheduleFinished(message.exitCode, message.closeError);
     }
     return;
   }

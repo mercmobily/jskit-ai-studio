@@ -528,6 +528,7 @@ import {
   issueSessionFacts,
   issueSessionStatusColor,
   issueSessionStatusLabel,
+  shouldSendIssueSessionCodexPrompt,
   shouldUseManualIssueSessionCodexPrompt,
   shortIssueSessionId
 } from "@/lib/issueSessionViewModel.js";
@@ -1408,7 +1409,7 @@ async function handleStepResponse(response, {
     response?.prompt &&
     (
       forcePromptInjection ||
-      (response?.ok === false && response?.codex?.autoInject === true)
+      shouldSendIssueSessionCodexPrompt(response)
     )
   ) {
     await requestCodexPromptInjection(response);
@@ -1467,7 +1468,7 @@ async function executeCurrentStep() {
     forcePromptInjection: Boolean(
       selectedStepAction.value?.kind === "codex_prompt" &&
       response?.prompt &&
-      response?.codex?.autoInject === true
+      shouldSendIssueSessionCodexPrompt(response)
     ),
     runAutomaticFollowUps: false
   });
@@ -1539,7 +1540,9 @@ async function handleSessionStepTerminalFinished(event = {}) {
   }
   await selectSession(event.sessionId, { preserveList: true });
   await loadIssueSessions();
-  if (Number(event.exitCode) === 0) {
+  const stillOnSetupStep = selectedSession.value?.sessionId === event.sessionId &&
+    selectedSession.value?.currentStep === "dependencies_installed";
+  if (!stillOnSetupStep) {
     setupTerminalSessionId.value = "";
   }
 }

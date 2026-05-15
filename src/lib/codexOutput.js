@@ -28,6 +28,65 @@ const STANDALONE_TERMINAL_CONTROL_PATTERN = new RegExp(`[${STANDALONE_TERMINAL_C
 const CODEX_THREAD_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 const CODEX_THREAD_ID_TOKEN_PATTERN = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/giu;
 const CODEX_TRUST_PROMPT_PATTERN = /Do you trust the contents of this directory\?/u;
+const STUDIO_CONTEXT_START_MARKER = "[[JSKIT_STUDIO_CONTEXT_START]]";
+const STUDIO_CONTEXT_END_MARKER = "[[JSKIT_STUDIO_CONTEXT_END]]";
+
+function terminalControlSequenceEnd(value, index) {
+  const source = String(value || "");
+  const character = source[index] || "";
+  if (!character) {
+    return index;
+  }
+
+  if (character === ESCAPE_CHARACTER) {
+    const next = source[index + 1] || "";
+    if (next === "]" || ["P", "X", "^", "_"].includes(next)) {
+      for (let cursor = index + 2; cursor < source.length; cursor += 1) {
+        if (source[cursor] === BELL_CHARACTER) {
+          return cursor + 1;
+        }
+        if (source[cursor] === ESCAPE_CHARACTER && source[cursor + 1] === "\\") {
+          return cursor + 2;
+        }
+      }
+      return source.length;
+    }
+    if (next === "[") {
+      for (let cursor = index + 2; cursor < source.length; cursor += 1) {
+        const code = source.charCodeAt(cursor);
+        if (code >= 0x40 && code <= 0x7e) {
+          return cursor + 1;
+        }
+      }
+      return source.length;
+    }
+    return Math.min(index + 2, source.length);
+  }
+
+  if (character === C1_CSI_CHARACTER) {
+    for (let cursor = index + 1; cursor < source.length; cursor += 1) {
+      const code = source.charCodeAt(cursor);
+      if (code >= 0x40 && code <= 0x7e) {
+        return cursor + 1;
+      }
+    }
+    return source.length;
+  }
+
+  if (C1_TERMINAL_STRING_START_CHARACTERS.includes(character)) {
+    for (let cursor = index + 1; cursor < source.length; cursor += 1) {
+      if ([BELL_CHARACTER, STRING_TERMINATOR_CHARACTER].includes(source[cursor])) {
+        return cursor + 1;
+      }
+      if (source[cursor] === ESCAPE_CHARACTER && source[cursor + 1] === "\\") {
+        return cursor + 2;
+      }
+    }
+    return source.length;
+  }
+
+  return index;
+}
 
 function stripTerminalControlSequences(value) {
   const source = String(value || "")
@@ -39,6 +98,85 @@ function stripTerminalControlSequences(value) {
     .replace(ESCAPE_SEQUENCE_PATTERN, "");
   return stripAnsi(source)
     .replace(STANDALONE_TERMINAL_CONTROL_PATTERN, "");
+}
+
+function trailingMarkerPrefixLength(value, marker) {
+  const source = String(value || "");
+  const maxLength = Math.min(source.length, marker.length - 1);
+  for (let length = maxLength; length > 0; length -= 1) {
+    if (marker.startsWith(source.slice(source.length - length))) {
+      return length;
+    }
+  }
+  return 0;
+}
+
+function terminalVisibleTextMap(value) {
+  const source = String(value || "");
+  let text = "";
+  const rawIndexes = [];
+  for (let cursor = 0; cursor < source.length;) {
+    const controlEnd = terminalControlSequenceEnd(source, cursor);
+    if (controlEnd > cursor) {
+      cursor = controlEnd;
+      continue;
+    }
+    text += source[cursor];
+    rawIndexes.push(cursor);
+    cursor += 1;
+  }
+  return {
+    rawIndexes,
+    text
+  };
+}
+
+function firstVisibleIndexAtOrAfterRawIndex(rawIndexes, rawIndex) {
+  const targetRawIndex = Math.max(0, Number(rawIndex || 0));
+  const index = rawIndexes.findIndex((candidate) => candidate >= targetRawIndex);
+  return index < 0 ? rawIndexes.length : index;
+}
+
+function rawIndexForVisibleOffset(rawIndexes, visibleOffset, fallbackRawIndex) {
+  if (visibleOffset >= rawIndexes.length) {
+    return fallbackRawIndex;
+  }
+  return rawIndexes[visibleOffset];
+}
+
+function stripStudioContextBlocksForDisplay(value) {
+  const source = String(value || "");
+  if (!source) {
+    return "";
+  }
+
+  const { rawIndexes, text } = terminalVisibleTextMap(source);
+  let output = "";
+  let rawCursor = 0;
+  let visibleCursor = 0;
+  while (visibleCursor < text.length) {
+    const start = text.indexOf(STUDIO_CONTEXT_START_MARKER, visibleCursor);
+    if (start < 0) {
+      const tail = text.slice(visibleCursor);
+      const partialLength = trailingMarkerPrefixLength(tail, STUDIO_CONTEXT_START_MARKER);
+      const rawEnd = partialLength > 0
+        ? rawIndexForVisibleOffset(rawIndexes, text.length - partialLength, source.length)
+        : source.length;
+      return `${output}${source.slice(rawCursor, rawEnd)}`
+        .replaceAll(STUDIO_CONTEXT_END_MARKER, "");
+    }
+
+    output += source.slice(rawCursor, rawIndexes[start]);
+    const end = text.indexOf(STUDIO_CONTEXT_END_MARKER, start + STUDIO_CONTEXT_START_MARKER.length);
+    if (end < 0) {
+      return output;
+    }
+    visibleCursor = end + STUDIO_CONTEXT_END_MARKER.length;
+    rawCursor = rawIndexForVisibleOffset(rawIndexes, visibleCursor, source.length);
+    visibleCursor = firstVisibleIndexAtOrAfterRawIndex(rawIndexes, rawCursor);
+  }
+
+  return `${output}${source.slice(rawCursor)}`.replaceAll(STUDIO_CONTEXT_END_MARKER, "");
 }
 
 function isCodexThreadId(value) {
@@ -85,5 +223,6 @@ export {
   codexTrustPromptLooksActive,
   extractCodexThreadId,
   isCodexThreadId,
+  stripStudioContextBlocksForDisplay,
   stripTerminalControlSequences
 };

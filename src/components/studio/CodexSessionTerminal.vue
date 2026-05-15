@@ -120,6 +120,7 @@ import {
 import {
   codexTrustPromptLooksActive,
   extractCodexThreadId,
+  stripStudioContextBlocksForDisplay,
   stripTerminalControlSequences
 } from "@/lib/codexOutput.js";
 import { terminalInputHasUserText } from "@/lib/terminalInput.js";
@@ -181,6 +182,7 @@ let terminalReconnectTimer = null;
 let terminalOutputEmitTimer = null;
 let terminalSetupPromise = null;
 let terminalOutputOffset = 0;
+let terminalDisplayOutput = "";
 let terminalStartPromise = null;
 let terminalRecoveryPromise = null;
 let codexThreadCapturePromise = null;
@@ -193,6 +195,8 @@ let terminalLatestOutput = "";
 let terminalLastOutputAt = 0;
 let terminalStartedAt = 0;
 let codexTrustPromptAnsweredAt = 0;
+let promptEchoFilterId = 0;
+let promptEchoFilters = [];
 
 const DEFAULT_CODEX_THREAD_COMMAND = "echo $CODEX_THREAD_ID";
 const CODEX_BOOT_MIN_AGE_MS = 1800;
@@ -319,6 +323,139 @@ function trimTerminalOutput(output) {
   return terminalOutput.slice(terminalOutput.length - MAX_TERMINAL_OUTPUT_LENGTH);
 }
 
+function promptEchoCandidates(prompt) {
+  const source = String(prompt || "");
+  return [...new Set([
+    source,
+    source.replace(/\r?\n/gu, "\r\n"),
+    source.replace(/\r?\n/gu, "\n"),
+    source.replace(/\r?\n/gu, "\r")
+  ])].filter(Boolean);
+}
+
+function promptEchoReplacement(prompt) {
+  const compactSource = stripStudioContextBlocksForDisplay(prompt).replace(/\s+/gu, " ").trim();
+  if (!compactSource) {
+    return "JSKIT prompt sent.";
+  }
+  if (compactSource.length <= 220) {
+    return compactSource;
+  }
+  return "JSKIT prompt sent.";
+}
+
+function addPromptEchoFilter({
+  outputStart = 0,
+  prompt = ""
+} = {}) {
+  const candidates = promptEchoCandidates(prompt);
+  if (!candidates.length) {
+    return 0;
+  }
+  const replacement = promptEchoReplacement(prompt);
+  promptEchoFilterId += 1;
+  promptEchoFilters = [
+    ...promptEchoFilters.filter((filter) => (
+      filter.outputStart !== outputStart ||
+      filter.replacement !== replacement
+    )),
+    {
+      candidates,
+      id: promptEchoFilterId,
+      outputStart,
+      replacement
+    }
+  ].sort((left, right) => left.outputStart - right.outputStart);
+  return promptEchoFilterId;
+}
+
+function removePromptEchoFilter(filterId) {
+  if (!filterId) {
+    return;
+  }
+  promptEchoFilters = promptEchoFilters.filter((filter) => filter.id !== filterId);
+}
+
+function promptEchoMatchForFilter(output, filter) {
+  const start = Math.max(0, filter.outputStart);
+  if (start > output.length) {
+    return null;
+  }
+  const tail = output.slice(start);
+  for (const candidate of filter.candidates) {
+    if (output.startsWith(candidate, start)) {
+      return {
+        end: start + candidate.length,
+        partial: false,
+        start
+      };
+    }
+    if (candidate.startsWith(tail)) {
+      return {
+        end: output.length,
+        partial: true,
+        start
+      };
+    }
+  }
+  for (const candidate of filter.candidates) {
+    const matchStart = output.indexOf(candidate, start);
+    if (matchStart >= start && matchStart - start <= 1024) {
+      return {
+        end: matchStart + candidate.length,
+        partial: false,
+        start: matchStart
+      };
+    }
+  }
+  return null;
+}
+
+function displayTerminalOutput(output) {
+  const source = String(output || "");
+  let displayOutput = "";
+  if (!promptEchoFilters.length) {
+    return stripStudioContextBlocksForDisplay(source);
+  }
+
+  let cursor = 0;
+  for (const filter of promptEchoFilters) {
+    const match = promptEchoMatchForFilter(source, filter);
+    if (!match || match.start < cursor) {
+      continue;
+    }
+    displayOutput += source.slice(cursor, match.start);
+    if (!match.partial) {
+      displayOutput += filter.replacement;
+    }
+    cursor = match.end;
+  }
+  displayOutput += source.slice(cursor);
+  return stripStudioContextBlocksForDisplay(displayOutput);
+}
+
+function writeTerminalDisplay(output) {
+  const displayOutput = displayTerminalOutput(output);
+  if (!terminalInstance) {
+    terminalDisplayOutput = displayOutput;
+    terminalOutputOffset = displayOutput.length;
+    return;
+  }
+  if (
+    displayOutput.length < terminalOutputOffset ||
+    !displayOutput.startsWith(terminalDisplayOutput.slice(0, terminalOutputOffset))
+  ) {
+    terminalOutputOffset = 0;
+    terminalInstance.reset();
+  }
+  const chunk = displayOutput.slice(terminalOutputOffset);
+  if (chunk) {
+    terminalInstance.write(chunk);
+  }
+  terminalDisplayOutput = displayOutput;
+  terminalOutputOffset = displayOutput.length;
+}
+
 function clearTerminalOutputEmit() {
   if (!terminalOutputEmitTimer) {
     return;
@@ -391,6 +528,8 @@ function disposeTerminalUi() {
   }
   terminalFitAddon = null;
   terminalOutputOffset = 0;
+  terminalDisplayOutput = "";
+  promptEchoFilters = [];
   terminalHasOutput = false;
   terminalLatestOutput = "";
   terminalLastOutputAt = 0;
@@ -481,19 +620,7 @@ function writeTerminalOutput(output) {
     terminalHasOutput = stripTerminalControlSequences(nextOutput).trim().length > 0;
   }
   void captureCodexThreadFromOutput(nextOutput);
-  if (!terminalInstance) {
-    terminalOutputOffset = nextOutput.length;
-    return;
-  }
-  if (nextOutput.length < terminalOutputOffset) {
-    terminalOutputOffset = 0;
-    terminalInstance.reset();
-  }
-  const chunk = nextOutput.slice(terminalOutputOffset);
-  if (chunk) {
-    terminalInstance.write(chunk);
-    terminalOutputOffset = nextOutput.length;
-  }
+  writeTerminalDisplay(nextOutput);
 }
 
 function appendTerminalOutput(chunk) {
@@ -506,10 +633,7 @@ function appendTerminalOutput(chunk) {
   terminalLastOutputAt = Date.now();
   terminalHasOutput = terminalHasOutput || stripTerminalControlSequences(outputChunk).trim().length > 0;
   void captureCodexThreadFromOutput(nextOutput);
-  if (terminalInstance) {
-    terminalInstance.write(outputChunk);
-  }
-  terminalOutputOffset = nextOutput.length;
+  writeTerminalDisplay(nextOutput);
   scheduleTerminalOutputEmit();
 }
 
@@ -555,6 +679,17 @@ function scheduleTerminalReconnect() {
 
 function applyTerminalSnapshot(session = {}) {
   applyCodexThreadState(session);
+  const persistedOutputStart = Number(session.codexPromptHandoffOutputStart);
+  if (
+    Number.isSafeInteger(persistedOutputStart) &&
+    persistedOutputStart >= 0 &&
+    codexPrompt.value
+  ) {
+    addPromptEchoFilter({
+      outputStart: persistedOutputStart,
+      prompt: codexPrompt.value
+    });
+  }
   terminalStatus.value = session.status || terminalStatus.value || "";
   terminalCommandPreview.value = session.commandPreview || terminalCommandPreview.value;
   writeTerminalOutput(session.output);
@@ -1033,6 +1168,10 @@ async function injectPrompt() {
   try {
     if (await ensureTerminalReady() && await ensureCodexThreadReady({ forceRetry: true })) {
       const promptOutputSnapshot = terminalLatestOutput;
+      const promptEchoFilter = addPromptEchoFilter({
+        outputStart: promptOutputSnapshot.length,
+        prompt: codexPrompt.value
+      });
       const sent = await sendTerminalData(`\u001b[200~${codexPrompt.value}\u001b[201~\r`);
       if (sent) {
         autoPromptInjected.value = true;
@@ -1043,6 +1182,9 @@ async function injectPrompt() {
           prompt: codexPrompt.value,
           sessionId: sessionId.value
         });
+      }
+      if (!sent) {
+        removePromptEchoFilter(promptEchoFilter);
       }
       return sent;
     }
@@ -1142,6 +1284,8 @@ async function recoverMissingTerminal() {
       terminalInstance.reset();
     }
     terminalOutputOffset = 0;
+    terminalDisplayOutput = "";
+    promptEchoFilters = [];
     terminalLatestOutput = "";
     emitTerminalOutputNow("");
     terminalHasOutput = false;

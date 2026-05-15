@@ -195,7 +195,7 @@ ensure_clean_local_source() {
   local dirty
   dirty="$(git -C "$source" status --porcelain)"
   if [ -n "$dirty" ]; then
-    fail "Source sibling $name at $source has uncommitted changes. Commit or stash them before provisioning so the session clone is complete."
+    fail "Session provisioning needs a clean sibling source for $name. The source checkout at $source has uncommitted changes, and a session-owned clone can only reproduce committed state. Commit or stash the sibling repo changes, then retry provisioning."
   fi
 }
 
