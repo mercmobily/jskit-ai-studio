@@ -13,6 +13,7 @@
     "server:home": "SERVER_SURFACE=home node ./bin/server.js",
     "start": "node ./bin/server.js",
     "devlinks": "jskit app link-local-packages",
+    "postinstall": "bash scripts/devel-link-local-packages-postinstall.sh",
     "dev": "node ./bin/dev.js",
     "dev:all": "node ./bin/dev.js",
     "dev:home": "VITE_SURFACE=home node ./bin/dev.js",

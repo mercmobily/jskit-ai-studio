@@ -2068,7 +2068,12 @@ function uiCheckForStep(stepId) {
 }
 
 function stepIsSkipped(step = {}) {
-  return stepSourceIds(step).every((stepId) => String(uiCheckForStep(stepId)?.status || "").trim() === "skipped");
+  return stepSourceIds(step).every((stepId) => {
+    if (stepId === "main_checkout_synced") {
+      return String(selectedSession.value?.mainCheckoutSync?.status || "").trim() === "skipped";
+    }
+    return String(uiCheckForStep(stepId)?.status || "").trim() === "skipped";
+  });
 }
 
 function stepIsDone(step = {}) {

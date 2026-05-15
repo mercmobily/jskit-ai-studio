@@ -7,6 +7,7 @@ set -euo pipefail
 #
 # Optional sibling repo config:
 #   JSKIT_AI_ROOT=/absolute/path/to/jskit-ai
+#   JSKIT_DEVLINKS=/absolute/path/to/jskit-ai
 #   JSKIT_SIBLING_REPOS=jskit-ai
 #   .jskit/config/devel_sibling_repos
 #   .jskit/config/devel_sibling_roots/<repo-name>
@@ -57,12 +58,33 @@ repo_env_prefix() {
   printf '%s' "$1" | tr '[:lower:]' '[:upper:]' | sed 's/[^A-Z0-9]/_/g'
 }
 
+devlinks_repo_root() {
+  case "${JSKIT_DEVLINKS-}" in
+    "" | "0" | "false" | "False" | "FALSE" | "no" | "No" | "NO" | "off" | "Off" | "OFF")
+      return 1
+      ;;
+    "1" | "true" | "True" | "TRUE" | "yes" | "Yes" | "YES" | "on" | "On" | "ON" | "auto" | "Auto" | "AUTO")
+      if [ -n "${JSKIT_AI_ROOT-}" ]; then
+        printf '%s\n' "$JSKIT_AI_ROOT"
+        return 0
+      fi
+      return 1
+      ;;
+    *)
+      printf '%s\n' "$JSKIT_DEVLINKS"
+      return 0
+      ;;
+  esac
+}
+
 configured_siblings() {
   local raw="${JSKIT_SIBLING_REPOS-}"
   if [ -z "$raw" ] && [ -f "$TARGET_CONFIG_DIR/devel_sibling_repos" ]; then
     raw="$(cat "$TARGET_CONFIG_DIR/devel_sibling_repos")"
   fi
-  if [ -z "$raw" ] && [ -n "${JSKIT_AI_ROOT-}" ]; then
+  local devlinks_root
+  devlinks_root="$(devlinks_repo_root || true)"
+  if [ -z "$raw" ] && { [ -n "${JSKIT_AI_ROOT-}" ] || [ -n "$devlinks_root" ]; }; then
     raw="jskit-ai"
   fi
 
@@ -93,6 +115,15 @@ sibling_source_for() {
   if [ "$name" = "jskit-ai" ] && [ -f "$TARGET_CONFIG_DIR/devel_jskit_ai_root" ]; then
     sed -n '1p' "$TARGET_CONFIG_DIR/devel_jskit_ai_root"
     return
+  fi
+
+  if [ "$name" = "jskit-ai" ]; then
+    local devlinks_root
+    devlinks_root="$(devlinks_repo_root || true)"
+    if [ -n "$devlinks_root" ]; then
+      printf '%s\n' "$devlinks_root"
+      return
+    fi
   fi
 
   return 1

@@ -119,6 +119,32 @@ test("Target App Doctor rejects Git identity terminal repair without valid input
   assert.match(response.error, /user\.name/u);
 });
 
+test("Target App Doctor allows targeting Studio's own repository root", async () => {
+  const status = await inspectTargetApp({
+    studioRoot: process.cwd(),
+    targetRoot: process.cwd()
+  });
+  const identity = status.checks.find((check) => check.id === "target-identity");
+  const gitRepository = status.checks.find((check) => check.id === "git-repository");
+
+  assert.equal(identity?.status, "pass");
+  assert.match(identity?.explanation || "", /self-development mode/u);
+  assert.notEqual(gitRepository?.observed, "Target identity is blocked.");
+});
+
+test("Target App Doctor blocks arbitrary subdirectories inside Studio's repository", async () => {
+  const status = await inspectTargetApp({
+    studioRoot: process.cwd(),
+    targetRoot: path.join(process.cwd(), "src")
+  });
+  const identity = status.checks.find((check) => check.id === "target-identity");
+  const gitRepository = status.checks.find((check) => check.id === "git-repository");
+
+  assert.equal(identity?.status, "fail");
+  assert.match(identity?.explanation || "", /repository root for self-development/u);
+  assert.equal(gitRepository?.observed, "Target identity is blocked.");
+});
+
 test("Target App Doctor blocks dependent checks when target directory is unavailable", async () => {
   const targetRoot = path.join(os.tmpdir(), `jskit-studio-missing-${Date.now()}`);
   const status = await inspectTargetApp({

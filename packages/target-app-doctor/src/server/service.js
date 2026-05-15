@@ -410,23 +410,23 @@ async function checkTargetIdentity({
     targetRepoRoot ? `Target repo: ${targetRepoRoot}` : ""
   ].filter(Boolean).join("\n");
 
-  if (studioRoot === targetRoot) {
-    return failCheck({
+  if (studioRoot === targetRoot || (studioRepoRoot && targetRepoRoot && studioRepoRoot === targetRepoRoot && targetRoot === targetRepoRoot)) {
+    return passCheck({
       id: "target-identity",
       label: "Target identity",
-      expected: "Target root is different from the Studio implementation root.",
+      expected: "Target root is Studio's own repository root or a separate app root.",
       observed,
-      explanation: "Studio is currently targeting itself. Start Studio from the app you want to operate on, or pass JSKIT_STUDIO_TARGET_ROOT from the launcher."
+      explanation: "Studio is targeting itself in self-development mode. JSKIT issue sessions will make changes in managed session worktrees."
     });
   }
 
-  if (studioRepoRoot && (targetRoot === studioRepoRoot || pathIsInside(studioRepoRoot, targetRoot))) {
+  if (studioRepoRoot && targetRepoRoot === studioRepoRoot && pathIsInside(studioRepoRoot, targetRoot)) {
     return failCheck({
       id: "target-identity",
       label: "Target identity",
-      expected: "Target root is outside Studio's own repository.",
+      expected: "Target root is Studio's repository root, a separate repository, or a separate git worktree.",
       observed,
-      explanation: "Studio should not operate on its own repository unless an explicit self-development mode is added later."
+      explanation: "Studio cannot safely target an arbitrary subdirectory of its own repository. Target the repository root for self-development."
     });
   }
 
@@ -443,9 +443,9 @@ async function checkTargetIdentity({
   return passCheck({
     id: "target-identity",
     label: "Target identity",
-    expected: "Target root and Studio root are separate.",
+    expected: "Target root is Studio's own repository root or a separate app root.",
     observed,
-    explanation: "Studio is pointed at a separate target directory."
+    explanation: "Studio is pointed at an app root that can be checked independently."
   });
 }
 
