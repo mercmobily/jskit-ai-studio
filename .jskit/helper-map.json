@@ -1483,17 +1483,7 @@
         ]
       },
       {
-        "path": "src/pages/home/abandoned.vue",
-        "exports": [
-          {
-            "name": "default",
-            "kind": "default",
-            "role": "default"
-          }
-        ]
-      },
-      {
-        "path": "src/pages/home/completed.vue",
+        "path": "src/pages/home/history.vue",
         "exports": [
           {
             "name": "default",

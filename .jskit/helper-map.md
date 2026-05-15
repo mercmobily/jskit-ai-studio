@@ -375,10 +375,7 @@ Root package: jskit-ai-studio
 - src/pages/home.vue
     - default (default, default)
 
-- src/pages/home/abandoned.vue
-    - default (default, default)
-
-- src/pages/home/completed.vue
+- src/pages/home/history.vue
     - default (default, default)
 
 - src/pages/home/index.vue
