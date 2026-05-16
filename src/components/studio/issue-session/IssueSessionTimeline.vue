@@ -14,7 +14,7 @@
         <div class="studio-issue-session-timeline__step-title">
           <span>
             {{ step.index + 1 }}.
-            {{ step.done ? "Done: " : "Goal: " }}{{ step.label }}
+            {{ step.label }}
           </span>
           <v-btn
             v-if="step.canExpand"

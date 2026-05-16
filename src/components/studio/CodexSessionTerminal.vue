@@ -121,7 +121,8 @@ import {
   codexTrustPromptLooksActive,
   extractCodexThreadId,
   stripStudioContextBlocksForDisplay,
-  stripTerminalControlSequences
+  stripTerminalControlSequences,
+  wrapPromptWithStudioContext
 } from "@/lib/codexOutput.js";
 import { terminalInputHasUserText } from "@/lib/terminalInput.js";
 import "@xterm/xterm/css/xterm.css";
@@ -217,6 +218,9 @@ const codexPrompt = computed(() => {
   }
   const promptField = String(props.session?.codex?.promptField || "");
   return promptField ? String(props.session?.[promptField] || "") : "";
+});
+const visibleCodexPrompt = computed(() => {
+  return String(props.session?.codex?.promptActionLabel || "").trim() || "Run Codex prompt.";
 });
 const manualPromptInjectionRequestKey = computed(() => String(props.promptInjectionRequestKey || ""));
 const terminalExited = computed(() => terminalStatus.value === "exited");
@@ -411,13 +415,13 @@ function promptEchoMatchForFilter(output, filter) {
   return null;
 }
 
-function displayTerminalOutput(output) {
+function outputWithPromptEchoFilters(output) {
   const source = String(output || "");
-  let displayOutput = "";
   if (!promptEchoFilters.length) {
-    return stripStudioContextBlocksForDisplay(source);
+    return source;
   }
 
+  let displayOutput = "";
   let cursor = 0;
   for (const filter of promptEchoFilters) {
     const match = promptEchoMatchForFilter(source, filter);
@@ -431,7 +435,11 @@ function displayTerminalOutput(output) {
     cursor = match.end;
   }
   displayOutput += source.slice(cursor);
-  return stripStudioContextBlocksForDisplay(displayOutput);
+  return displayOutput;
+}
+
+function displayTerminalOutput(output) {
+  return stripStudioContextBlocksForDisplay(outputWithPromptEchoFilters(output));
 }
 
 function writeTerminalDisplay(output) {
@@ -1168,11 +1176,12 @@ async function injectPrompt() {
   try {
     if (await ensureTerminalReady() && await ensureCodexThreadReady({ forceRetry: true })) {
       const promptOutputSnapshot = terminalLatestOutput;
+      const promptToSend = wrapPromptWithStudioContext(codexPrompt.value, visibleCodexPrompt.value);
       const promptEchoFilter = addPromptEchoFilter({
         outputStart: promptOutputSnapshot.length,
-        prompt: codexPrompt.value
+        prompt: promptToSend
       });
-      const sent = await sendTerminalData(`\u001b[200~${codexPrompt.value}\u001b[201~\r`);
+      const sent = await sendTerminalData(`\u001b[200~${promptToSend}\u001b[201~\r`);
       if (sent) {
         autoPromptInjected.value = true;
         copyStatus.value = "Prompt injected into Codex.";

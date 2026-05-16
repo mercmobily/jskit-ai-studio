@@ -21,23 +21,32 @@ function issueSessionDisplayTitle(session = {}) {
   return shortSessionId ? `Session ${shortSessionId}` : "";
 }
 
-function parseGithubSessionLink(value, kind) {
-  const fallbackLabel = kind === "pr" ? "Pull request" : "Issue";
+function githubSessionLinkParts(value, kind) {
   try {
     const url = new URL(String(value || ""));
     const [, owner, repo, type, number] = url.pathname.split("/");
     const expectedType = kind === "pr" ? "pull" : "issues";
     if (url.hostname === "github.com" && owner && repo && type === expectedType && number) {
-      const prefix = kind === "pr" ? "PR" : "Issue";
       return {
-        label: `${prefix} #${number}`,
-        repo: `${owner}/${repo}`
+        number,
+        owner,
+        repo
       };
     }
   } catch {
+    return null;
+  }
+  return null;
+}
+
+function parseGithubSessionLink(value, kind) {
+  const fallbackLabel = kind === "pr" ? "Pull request" : "Issue";
+  const parts = githubSessionLinkParts(value, kind);
+  if (parts) {
+    const prefix = kind === "pr" ? "PR" : "Issue";
     return {
-      label: fallbackLabel,
-      repo: ""
+      label: `${prefix} #${parts.number}`,
+      repo: `${parts.owner}/${parts.repo}`
     };
   }
   return {
@@ -76,6 +85,40 @@ function isOpenIssueSession(session = {}) {
   return !isClosedIssueSession(session);
 }
 
+function issueSessionHasIssueDraft(session = {}) {
+  return Boolean(normalizedText(session.issueText) && normalizedText(session.issueTitle));
+}
+
+function issueSessionIssueParts(session = {}) {
+  return githubSessionLinkParts(session.issueUrl, "issue");
+}
+
+function issueSessionHasGithubIssue(session = {}) {
+  return Boolean(issueSessionIssueParts(session));
+}
+
+function issueSessionIssueNumber(session = {}) {
+  return normalizedText(session.issueNumber) || issueSessionIssueParts(session)?.number || "";
+}
+
+function issueSessionCanCreateGithubIssue(session = {}) {
+  return isOpenIssueSession(session) &&
+    normalizedText(session.currentStep) === "issue_submitted" &&
+    issueSessionHasIssueDraft(session) &&
+    !issueSessionHasGithubIssue(session);
+}
+
+function issueSessionHasPullRequestDraft(session = {}) {
+  return Boolean(normalizedText(session.pullRequestText));
+}
+
+function issueSessionCanCreateGithubPullRequest(session = {}) {
+  return isOpenIssueSession(session) &&
+    normalizedText(session.currentStep) === "pr_created" &&
+    issueSessionHasPullRequestDraft(session) &&
+    !normalizedText(session.prUrl);
+}
+
 function canUseIssueSessionTerminal(session = {}) {
   return isOpenIssueSession(session) &&
     session.worktreeReady === true &&
@@ -112,6 +155,38 @@ function issueSessionCodexPromptActionLabel(session = {}) {
   return String(session?.codex?.promptActionLabel || "").trim() || "Submit prompt to Codex";
 }
 
+function issueSessionActionSubmitsCodexPrompt(session = {}, action = {}) {
+  const currentStep = normalizedText(session.currentStep);
+  const actionKind = normalizedText(action.kind);
+  const actionCommand = normalizedText(action.actionCommand || action.sessionAction || action.id || action.command);
+  const automationMode = normalizedText(action.automation?.mode);
+  if (actionKind === "codex_prompt" || automationMode === "codex_prompt") {
+    return true;
+  }
+  if (currentStep === "issue_prompt_rendered" && (!actionCommand || actionCommand === "define_issue")) {
+    return true;
+  }
+  if (
+    currentStep === "issue_created" &&
+    (!actionCommand || actionCommand === "create_issue_file")
+  ) {
+    return true;
+  }
+  if (
+    currentStep === "final_report_created" &&
+    (!actionCommand || actionCommand === "create_pull_request_file")
+  ) {
+    return true;
+  }
+  if (
+    currentStep === "pr_merge_prepared" &&
+    actionCommand === "prepare_for_merge"
+  ) {
+    return true;
+  }
+  return false;
+}
+
 function normalizedText(value) {
   return String(value || "").trim();
 }
@@ -146,8 +221,12 @@ function issueSessionFacts(session = {}, stepDefinitions = []) {
   const prLink = parseGithubSessionLink(session.prUrl, "pr");
   const completedStepCount = Array.isArray(session.completedSteps) ? session.completedSteps.length : 0;
   const currentStepLabel = issueSessionCurrentStepLabel(session, stepDefinitions);
+  const nextCommand = firstText(session.nextCommand);
+  const actionCommands = Array.isArray(session.actionCommands)
+    ? session.actionCommands.map((command) => firstText(command?.command)).filter(Boolean)
+    : [];
   const blueprintPath = firstText(session.blueprintPath, session.blueprint?.path, session.appBlueprintPath);
-  const finalReportPath = firstText(session.finalReportPath);
+  const pullRequestPath = firstText(session.pullRequestPath);
   const prOutcome = session.prOutcome && typeof session.prOutcome === "object" ? session.prOutcome : null;
 
   return [
@@ -158,6 +237,26 @@ function issueSessionFacts(session = {}, stepDefinitions = []) {
       label: "Current Step",
       value: currentStepLabel,
       visible: Boolean(currentStepLabel)
+    },
+    {
+      copyValue: nextCommand,
+      detail: "Same step from the command line",
+      icon: "step",
+      key: "next-command",
+      label: "Next CLI Step",
+      value: nextCommand,
+      visible: Boolean(nextCommand && isOpenIssueSession(session))
+    },
+    {
+      copyValue: actionCommands.join("\n"),
+      detail: actionCommands[0] || "",
+      expandable: actionCommands.length > 1,
+      expandedValue: actionCommands.join("\n"),
+      icon: "step",
+      key: "action-commands",
+      label: "Step Commands",
+      value: actionCommands.length === 1 ? actionCommands[0] : `${actionCommands.length} commands`,
+      visible: actionCommands.length > 0
     },
     {
       copyValue: session.sessionRoot || session.sessionId || "",
@@ -226,14 +325,14 @@ function issueSessionFacts(session = {}, stepDefinitions = []) {
       visible: Boolean(session.blueprintExists && blueprintPath)
     },
     {
-      copyValue: finalReportPath,
-      detail: finalReportPath,
-      href: fileHref(finalReportPath),
+      copyValue: pullRequestPath,
+      detail: pullRequestPath,
+      href: fileHref(pullRequestPath),
       icon: "report",
-      key: "final-report",
-      label: "Final Report",
-      value: "final_report.md",
-      visible: Boolean(finalReportPath)
+      key: "pull-request-draft",
+      label: "PR Draft",
+      value: "pull_request.md",
+      visible: Boolean(pullRequestPath && issueSessionHasPullRequestDraft(session))
     },
     {
       detail: firstText(prOutcome?.reason, prOutcome?.mergedAt),
@@ -251,9 +350,17 @@ export {
   isAbandonedIssueSession,
   isClosedIssueSession,
   isOpenIssueSession,
+  issueSessionActionSubmitsCodexPrompt,
+  issueSessionCanCreateGithubPullRequest,
+  issueSessionCanCreateGithubIssue,
   issueSessionDisplayTitle,
   issueSessionFacts,
   issueSessionCodexPromptActionLabel,
+  issueSessionHasGithubIssue,
+  issueSessionHasIssueDraft,
+  issueSessionHasPullRequestDraft,
+  issueSessionIssueNumber,
+  issueSessionIssueParts,
   issueSessionStatusColor,
   issueSessionStatusLabel,
   issueSessionTitleFromIssueText,

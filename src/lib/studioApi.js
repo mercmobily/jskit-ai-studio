@@ -120,6 +120,26 @@ async function readIssueSessionDiff(sessionId) {
   return studioHttpClient.get(`${ISSUE_SESSIONS_ENDPOINT}/${encodeURIComponent(sessionId)}/diff`);
 }
 
+async function saveIssueSessionIssueDraft(sessionId, input = {}) {
+  return studioHttpClient.put(`${ISSUE_SESSIONS_ENDPOINT}/${encodeURIComponent(sessionId)}/issue-draft`, input);
+}
+
+async function readIssueSessionPullRequestDraft(sessionId) {
+  return studioHttpClient.get(`${ISSUE_SESSIONS_ENDPOINT}/${encodeURIComponent(sessionId)}/pull-request-draft`);
+}
+
+async function saveIssueSessionPullRequestDraft(sessionId, input = {}) {
+  return studioHttpClient.put(`${ISSUE_SESSIONS_ENDPOINT}/${encodeURIComponent(sessionId)}/pull-request-draft`, input);
+}
+
+async function readIssueSessionBlueprint(sessionId) {
+  return studioHttpClient.get(`${ISSUE_SESSIONS_ENDPOINT}/${encodeURIComponent(sessionId)}/blueprint`);
+}
+
+async function saveIssueSessionBlueprint(sessionId, input = {}) {
+  return studioHttpClient.put(`${ISSUE_SESSIONS_ENDPOINT}/${encodeURIComponent(sessionId)}/blueprint`, input);
+}
+
 async function runIssueSessionStep(sessionId, input = {}) {
   return studioHttpClient.post(`${ISSUE_SESSIONS_ENDPOINT}/${encodeURIComponent(sessionId)}/step`, input);
 }
@@ -342,14 +362,19 @@ export {
   readBootstrapStatus,
   readCurrentApp,
   readIssueSession,
+  readIssueSessionBlueprint,
   readIssueSessionCodexTerminal,
   readIssueSessionDiff,
+  readIssueSessionPullRequestDraft,
   readNpmScripts,
   readTargetAppStatus,
   resolveStudioGate,
   resetStarredNpmScripts,
   rewindIssueSession,
   runIssueSessionStep,
+  saveIssueSessionBlueprint,
+  saveIssueSessionIssueDraft,
+  saveIssueSessionPullRequestDraft,
   saveIssueSessionCodexPromptHandoff,
   saveIssueSessionCodexThread,
   saveStarredNpmScripts,

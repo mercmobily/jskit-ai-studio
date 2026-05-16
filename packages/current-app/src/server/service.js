@@ -11,12 +11,14 @@ import { loadAppConfigFromAppRoot } from "@jskit-ai/kernel/server/support";
 import {
   abandonSession,
   adoptDependenciesInstalled,
+  advanceSessionStep,
   createSession,
   inspectSessionDiff,
   inspectSessionDetails,
   listSessions,
   rewindSession,
-  runSessionStep
+  runSessionStep,
+  runSessionStepAction
 } from "@jskit-ai/jskit-cli/server";
 import {
   closeTerminalSession,
@@ -40,6 +42,8 @@ const DEFAULT_APP_TEST_BUILD_COMMAND = "npm run build";
 const DEFAULT_APP_TEST_SERVER_COMMAND = "npm run server";
 const DEFAULT_APP_TEST_PORT = 4100;
 const APP_TEST_CONFIG_DIR = ".jskit/config";
+const APP_BLUEPRINT_RELATIVE_PATH = ".jskit/APP_BLUEPRINT.md";
+const PULL_REQUEST_DRAFT_FILE = "pull_request.md";
 const APP_TEST_TESTRUN_COMMAND_CONFIG = `${APP_TEST_CONFIG_DIR}/testrun_command`;
 const APP_TEST_SERVER_PORT_CONFIG = `${APP_TEST_CONFIG_DIR}/server_port`;
 const APP_TEST_HOST_DOCKER_CONFIG = `${APP_TEST_CONFIG_DIR}/devel_app_test_host_docker`;
@@ -1646,12 +1650,341 @@ function createService({ appRoot = "" } = {}) {
       });
     },
 
-    async runIssueSessionStep(sessionId, input = {}) {
-      const response = await runSessionStep({
+    async saveIssueSessionIssueDraft(sessionId, input = {}) {
+      const details = await decorateIssueSessionDetails(inspectionRoot, await inspectSessionDetails({
         targetRoot: inspectionRoot,
-        sessionId,
-        options: input || {}
-      });
+        sessionId
+      }));
+      if (details?.ok === false) {
+        return details;
+      }
+      if (!["issue_created", "issue_submitted"].includes(details.currentStep)) {
+        return {
+          ...details,
+          errors: [
+            {
+              code: "issue_draft_edit_wrong_step",
+              message: "Issue draft editing is only available before the GitHub issue is created."
+            }
+          ],
+          ok: false
+        };
+      }
+      if (details.issueUrl) {
+        return {
+          ...details,
+          errors: [
+            {
+              code: "issue_draft_already_published",
+              message: "The GitHub issue already exists; edit it on GitHub instead."
+            }
+          ],
+          ok: false
+        };
+      }
+      const issueTitle = String(input?.issueTitle || "").trim();
+      const issueText = String(input?.issueText || "").trim();
+      if (!issueTitle || !issueText) {
+        return {
+          ...details,
+          errors: [
+            {
+              code: "issue_draft_required",
+              message: "Issue title and issue body are required."
+            }
+          ],
+          ok: false
+        };
+      }
+      const sessionRoot = activeSessionDirectory(inspectionRoot, sessionId);
+      if (!sessionRoot) {
+        return {
+          ...details,
+          errors: [
+            {
+              code: "invalid_session_id",
+              message: `Invalid session id "${sessionId}".`
+            }
+          ],
+          ok: false
+        };
+      }
+      await Promise.all([
+        writeFile(path.join(sessionRoot, "issue_title"), `${issueTitle}\n`, "utf8"),
+        writeFile(path.join(sessionRoot, "issue.md"), `${issueText}\n`, "utf8")
+      ]);
+      return decorateIssueSessionDetails(inspectionRoot, await inspectSessionDetails({
+        targetRoot: inspectionRoot,
+        sessionId
+      }));
+    },
+
+    async readIssueSessionPullRequestDraft(sessionId) {
+      const details = await decorateIssueSessionDetails(inspectionRoot, await inspectSessionDetails({
+        targetRoot: inspectionRoot,
+        sessionId
+      }));
+      if (details?.ok === false) {
+        return details;
+      }
+      if (details.currentStep !== "pr_created") {
+        return {
+          ...details,
+          errors: [
+            {
+              code: "pull_request_draft_edit_wrong_step",
+              message: "Pull request draft editing is only available before the GitHub pull request is created."
+            }
+          ],
+          ok: false
+        };
+      }
+      if (details.prUrl) {
+        return {
+          ...details,
+          errors: [
+            {
+              code: "pull_request_already_published",
+              message: "The GitHub pull request already exists; edit it on GitHub instead."
+            }
+          ],
+          ok: false
+        };
+      }
+      const sessionRoot = activeSessionDirectory(inspectionRoot, sessionId);
+      if (!sessionRoot) {
+        return {
+          ...details,
+          errors: [
+            {
+              code: "invalid_session_id",
+              message: `Invalid session id "${sessionId}".`
+            }
+          ],
+          ok: false
+        };
+      }
+      const pullRequestPath = path.join(sessionRoot, PULL_REQUEST_DRAFT_FILE);
+      let pullRequestText = "";
+      try {
+        pullRequestText = await readFile(pullRequestPath, "utf8");
+      } catch (error) {
+        if (error?.code !== "ENOENT") {
+          throw error;
+        }
+      }
+      return {
+        ...details,
+        pullRequestPath,
+        pullRequestText
+      };
+    },
+
+    async saveIssueSessionPullRequestDraft(sessionId, input = {}) {
+      const details = await decorateIssueSessionDetails(inspectionRoot, await inspectSessionDetails({
+        targetRoot: inspectionRoot,
+        sessionId
+      }));
+      if (details?.ok === false) {
+        return details;
+      }
+      if (details.currentStep !== "pr_created") {
+        return {
+          ...details,
+          errors: [
+            {
+              code: "pull_request_draft_edit_wrong_step",
+              message: "Pull request draft editing is only available before the GitHub pull request is created."
+            }
+          ],
+          ok: false
+        };
+      }
+      if (details.prUrl) {
+        return {
+          ...details,
+          errors: [
+            {
+              code: "pull_request_already_published",
+              message: "The GitHub pull request already exists; edit it on GitHub instead."
+            }
+          ],
+          ok: false
+        };
+      }
+      const pullRequestText = String(input?.pullRequestText || "").trim();
+      if (!pullRequestText) {
+        return {
+          ...details,
+          errors: [
+            {
+              code: "pull_request_draft_required",
+              message: "Pull request body is required."
+            }
+          ],
+          ok: false
+        };
+      }
+      const sessionRoot = activeSessionDirectory(inspectionRoot, sessionId);
+      if (!sessionRoot) {
+        return {
+          ...details,
+          errors: [
+            {
+              code: "invalid_session_id",
+              message: `Invalid session id "${sessionId}".`
+            }
+          ],
+          ok: false
+        };
+      }
+      const pullRequestPath = path.join(sessionRoot, PULL_REQUEST_DRAFT_FILE);
+      await writeFile(pullRequestPath, `${pullRequestText}\n`, "utf8");
+      const updatedDetails = await decorateIssueSessionDetails(inspectionRoot, await inspectSessionDetails({
+        targetRoot: inspectionRoot,
+        sessionId
+      }));
+      return {
+        ...updatedDetails,
+        pullRequestPath,
+        pullRequestText
+      };
+    },
+
+    async readIssueSessionBlueprint(sessionId) {
+      const details = await decorateIssueSessionDetails(inspectionRoot, await inspectSessionDetails({
+        targetRoot: inspectionRoot,
+        sessionId
+      }));
+      if (details?.ok === false) {
+        return details;
+      }
+      if (details.currentStep !== "blueprint_updated") {
+        return {
+          ...details,
+          errors: [
+            {
+              code: "blueprint_edit_wrong_step",
+              message: "Blueprint editing is only available while the session is updating the blueprint."
+            }
+          ],
+          ok: false
+        };
+      }
+      const sessionRoot = activeSessionDirectory(inspectionRoot, sessionId);
+      if (!sessionRoot) {
+        return {
+          ...details,
+          errors: [
+            {
+              code: "invalid_session_id",
+              message: `Invalid session id "${sessionId}".`
+            }
+          ],
+          ok: false
+        };
+      }
+      const blueprintPath = path.join(sessionRoot, "worktree", APP_BLUEPRINT_RELATIVE_PATH);
+      let blueprintText = "";
+      try {
+        blueprintText = await readFile(blueprintPath, "utf8");
+      } catch (error) {
+        if (error?.code !== "ENOENT") {
+          throw error;
+        }
+      }
+      return {
+        ...details,
+        blueprintPath,
+        blueprintText
+      };
+    },
+
+    async saveIssueSessionBlueprint(sessionId, input = {}) {
+      const details = await decorateIssueSessionDetails(inspectionRoot, await inspectSessionDetails({
+        targetRoot: inspectionRoot,
+        sessionId
+      }));
+      if (details?.ok === false) {
+        return details;
+      }
+      if (details.currentStep !== "blueprint_updated") {
+        return {
+          ...details,
+          errors: [
+            {
+              code: "blueprint_edit_wrong_step",
+              message: "Blueprint editing is only available while the session is updating the blueprint."
+            }
+          ],
+          ok: false
+        };
+      }
+      const blueprintText = String(input?.blueprintText || "").trim();
+      if (!blueprintText) {
+        return {
+          ...details,
+          errors: [
+            {
+              code: "blueprint_required",
+              message: "Blueprint text is required."
+            }
+          ],
+          ok: false
+        };
+      }
+      const sessionRoot = activeSessionDirectory(inspectionRoot, sessionId);
+      if (!sessionRoot) {
+        return {
+          ...details,
+          errors: [
+            {
+              code: "invalid_session_id",
+              message: `Invalid session id "${sessionId}".`
+            }
+          ],
+          ok: false
+        };
+      }
+      const blueprintPath = path.join(sessionRoot, "worktree", APP_BLUEPRINT_RELATIVE_PATH);
+      await mkdir(path.dirname(blueprintPath), { recursive: true });
+      await writeFile(blueprintPath, `${blueprintText}\n`, "utf8");
+      const updatedDetails = await decorateIssueSessionDetails(inspectionRoot, await inspectSessionDetails({
+        targetRoot: inspectionRoot,
+        sessionId
+      }));
+      return {
+        ...updatedDetails,
+        blueprintPath,
+        blueprintText
+      };
+    },
+
+    async runIssueSessionStep(sessionId, input = {}) {
+      const action = String(input?.sessionAction || input?.actionCommand || "").trim();
+      const response = input?.advance === true
+        ? await advanceSessionStep({
+            targetRoot: inspectionRoot,
+            sessionId
+          })
+        : action
+          ? await runSessionStepAction({
+              action,
+              targetRoot: inspectionRoot,
+              sessionId,
+              options: input || {}
+            })
+          : await runSessionStep({
+              targetRoot: inspectionRoot,
+              sessionId,
+              options: input || {}
+            });
+      if (CLOSED_SESSION_STATUSES.has(String(response?.status || ""))) {
+        await closeTerminalSessionsForNamespace(terminalNamespace(sessionId));
+        await closeTerminalSessionsForNamespace(stepTerminalNamespace(sessionId));
+        await closeTerminalSessionsForNamespace(appTestTerminalNamespace(sessionId));
+        return response;
+      }
       const details = await decorateIssueSessionDetails(inspectionRoot, await inspectSessionDetails({
         targetRoot: inspectionRoot,
         sessionId

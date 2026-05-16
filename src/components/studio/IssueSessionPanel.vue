@@ -80,7 +80,7 @@
     <IssueSessionConfirmDialog
       v-model="abandonDialogOpen"
       title="Abandon session?"
-      body="This will abandon the selected session and close its Codex terminal."
+      :body="abandonDialogBody"
       confirm-label="Abandon"
       :loading="issueSessionBusy"
       @cancel="cancelAbandonSession"
@@ -112,6 +112,133 @@
       @body-click="handleDiffBodyClick"
       @close="closeDiffDialog"
     />
+
+    <v-dialog v-model="issueEditorOpen" max-width="min(92vw, 64rem)">
+      <v-card>
+        <v-toolbar border color="surface" density="comfortable">
+          <v-btn
+            :icon="mdiClose"
+            aria-label="Close issue editor"
+            title="Close issue editor"
+            variant="text"
+            @click="issueEditorOpen = false"
+          />
+          <v-toolbar-title>Edit the issue</v-toolbar-title>
+          <v-spacer />
+          <v-btn
+            color="primary"
+            variant="flat"
+            :disabled="issueEditorSaveDisabled"
+            :loading="issueSessionBusy"
+            :prepend-icon="mdiFileDocumentOutline"
+            @click="saveEditedIssueDraft"
+          >
+            Save issue
+          </v-btn>
+        </v-toolbar>
+        <v-card-text class="studio-issue-sessions__issue-editor">
+          <v-text-field
+            v-model="issueEditorTitle"
+            label="Issue title"
+            variant="outlined"
+            density="compact"
+            hide-details="auto"
+          />
+          <StudioLongTextReview
+            v-model="issueEditorText"
+            label="Issue body"
+            content-label="issue body"
+            placeholder="Edit the issue body."
+            review-button-label="Review full issue"
+            show-submit
+            :submit-disabled="issueEditorSaveDisabled"
+            submit-label="Save issue"
+            :submit-loading="issueSessionBusy"
+            @submit="saveEditedIssueDraft"
+          />
+        </v-card-text>
+      </v-card>
+    </v-dialog>
+
+    <v-dialog v-model="blueprintEditorOpen" max-width="min(92vw, 64rem)">
+      <v-card>
+        <v-toolbar border color="surface" density="comfortable">
+          <v-btn
+            :icon="mdiClose"
+            aria-label="Close blueprint editor"
+            title="Close blueprint editor"
+            variant="text"
+            @click="blueprintEditorOpen = false"
+          />
+          <v-toolbar-title>Edit blueprint</v-toolbar-title>
+          <v-spacer />
+          <v-btn
+            color="primary"
+            variant="flat"
+            :disabled="blueprintEditorSaveDisabled"
+            :loading="issueSessionBusy"
+            :prepend-icon="mdiFileDocumentOutline"
+            @click="saveEditedBlueprint"
+          >
+            Save blueprint
+          </v-btn>
+        </v-toolbar>
+        <v-card-text class="studio-issue-sessions__issue-editor">
+          <StudioLongTextReview
+            v-model="blueprintEditorText"
+            label="Blueprint"
+            content-label="app blueprint"
+            placeholder="Edit the app blueprint."
+            review-button-label="Review full blueprint"
+            show-submit
+            :submit-disabled="blueprintEditorSaveDisabled"
+            submit-label="Save blueprint"
+            :submit-loading="issueSessionBusy"
+            @submit="saveEditedBlueprint"
+          />
+        </v-card-text>
+      </v-card>
+    </v-dialog>
+
+    <v-dialog v-model="pullRequestEditorOpen" max-width="min(92vw, 64rem)">
+      <v-card>
+        <v-toolbar border color="surface" density="comfortable">
+          <v-btn
+            :icon="mdiClose"
+            aria-label="Close PR editor"
+            title="Close PR editor"
+            variant="text"
+            @click="pullRequestEditorOpen = false"
+          />
+          <v-toolbar-title>Edit PR</v-toolbar-title>
+          <v-spacer />
+          <v-btn
+            color="primary"
+            variant="flat"
+            :disabled="pullRequestEditorSaveDisabled"
+            :loading="issueSessionBusy"
+            :prepend-icon="mdiFileDocumentOutline"
+            @click="saveEditedPullRequestDraft"
+          >
+            Save PR
+          </v-btn>
+        </v-toolbar>
+        <v-card-text class="studio-issue-sessions__issue-editor">
+          <StudioLongTextReview
+            v-model="pullRequestEditorText"
+            label="PR body"
+            content-label="pull request body"
+            placeholder="Edit the pull request body."
+            review-button-label="Review full PR"
+            show-submit
+            :submit-disabled="pullRequestEditorSaveDisabled"
+            submit-label="Save PR"
+            :submit-loading="issueSessionBusy"
+            @submit="saveEditedPullRequestDraft"
+          />
+        </v-card-text>
+      </v-card>
+    </v-dialog>
 
     <div v-if="selectedSession" class="studio-issue-sessions__workspace">
       <section class="studio-issue-sessions__main">
@@ -167,7 +294,7 @@
               :placeholder="longTextPlaceholder(selectedStepInput)"
               :review-button-label="longTextReviewButtonLabel(selectedStepInput)"
               :show-submit="activeStepControls.showFormSubmit"
-              :submit-disabled="!activeStepControls.canSubmitForm"
+              :submit-disabled="!canUseFormSubmitButton"
               :submit-label="currentActionButtonLabel"
               :submit-loading="issueSessionBusy"
               @submit="submitCurrentForm($event)"
@@ -268,7 +395,7 @@
                   v-if="showCodexPromptResendButton"
                   color="warning"
                   variant="tonal"
-                  :disabled="selectedSessionTerminalBlocked || issueSessionBusy"
+                  :disabled="selectedSessionTerminalBlocked || issueSessionBusy || selectedSessionCodexPromptSendBlocked"
                   :prepend-icon="mdiSend"
                   @click="resendCurrentCodexPromptRequest"
                 >
@@ -278,7 +405,7 @@
                   v-if="hasManualCodexPromptAction && !activeStepControls.showExecuteStep"
                   color="primary"
                   variant="tonal"
-                  :disabled="selectedSessionTerminalBlocked || issueSessionBusy"
+                  :disabled="selectedSessionTerminalBlocked || issueSessionBusy || selectedSessionCodexPromptSendBlocked"
                   :prepend-icon="mdiSend"
                   @click="requestCodexPromptInjection()"
                 >
@@ -307,22 +434,129 @@
                   {{ diffUtilityAction.label || "Review changes" }}
                 </v-btn>
                 <v-btn
-                  v-if="activeStepControls.showExecuteStep"
+                  v-if="showCreateIssueFileButton"
+                  color="primary"
+                  variant="tonal"
+                  :disabled="!canCreateIssueFileButton"
+                  :loading="issueSessionBusy"
+                  :prepend-icon="mdiRobotOutline"
+                  @click="createIssueFileForSelectedSession"
+                >
+                  Create issue file
+                </v-btn>
+                <v-btn
+                  v-if="showEditIssueDraftButton"
+                  color="primary"
+                  variant="tonal"
+                  :disabled="!canEditIssueDraftButton"
+                  :prepend-icon="mdiPencilOutline"
+                  @click="openIssueEditor"
+                >
+                  Edit the issue
+                </v-btn>
+                <v-btn
+                  v-if="showCreateGithubIssueButton"
+                  color="primary"
+                  variant="flat"
+                  :disabled="!canCreateGithubIssueButton"
+                  :loading="issueSessionBusy"
+                  :prepend-icon="mdiGithub"
+                  @click="createGithubIssueForSelectedSession"
+                >
+                  Create issue on GH
+                </v-btn>
+                <v-btn
+                  v-if="showEditPullRequestButton"
+                  color="primary"
+                  variant="tonal"
+                  :disabled="!canEditPullRequestButton"
+                  :prepend-icon="mdiPencilOutline"
+                  @click="openPullRequestEditor"
+                >
+                  Edit PR
+                </v-btn>
+                <v-btn
+                  v-if="showCreateGithubPullRequestButton"
+                  color="primary"
+                  variant="flat"
+                  :disabled="!canCreateGithubPullRequestButton"
+                  :loading="issueSessionBusy"
+                  :prepend-icon="mdiGithub"
+                  @click="createGithubPullRequestForSelectedSession"
+                >
+                  Create PR on GH
+                </v-btn>
+                <v-btn
+                  v-if="showPrepareForMergeButton"
+                  color="primary"
+                  variant="tonal"
+                  :disabled="!canPrepareForMergeButton"
+                  :loading="issueSessionBusy"
+                  :prepend-icon="mdiRobotOutline"
+                  @click="prepareSelectedPullRequestForMerge"
+                >
+                  Prepare for merge
+                </v-btn>
+                <v-btn
+                  v-if="showMergePullRequestButton"
+                  color="primary"
+                  variant="flat"
+                  :disabled="!canMergePullRequestButton"
+                  :loading="issueSessionBusy"
+                  :prepend-icon="mdiGithub"
+                  @click="mergeSelectedPullRequest"
+                >
+                  Merge
+                </v-btn>
+                <v-btn
+                  v-if="showSyncMainCheckoutButton"
+                  color="primary"
+                  variant="flat"
+                  :disabled="!canSyncMainCheckoutButton"
+                  :loading="issueSessionBusy"
+                  :prepend-icon="mdiSync"
+                  @click="syncMainCheckoutForSelectedSession"
+                >
+                  Sync main checkout
+                </v-btn>
+                <v-btn
+                  v-if="showFinishSessionButton"
+                  color="primary"
+                  variant="flat"
+                  :disabled="!canFinishSessionButton"
+                  :loading="issueSessionBusy"
+                  :prepend-icon="mdiCheckCircleOutline"
+                  @click="finishSelectedSession"
+                >
+                  Finish
+                </v-btn>
+                <v-btn
+                  v-if="showPrimaryExecuteStepButton"
                   color="primary"
                   variant="tonal"
                   :loading="issueSessionBusy"
-                  :disabled="!activeStepControls.canExecuteStep"
+                  :disabled="!canUsePrimaryExecuteStepButton"
                   :prepend-icon="mdiPlay"
                   @click="executeCurrentStep"
                 >
                   {{ executeStepButtonLabel }}
                 </v-btn>
                 <v-btn
+                  v-if="showEditBlueprintButton"
+                  color="primary"
+                  variant="tonal"
+                  :disabled="!canEditBlueprintButton"
+                  :prepend-icon="mdiPencilOutline"
+                  @click="openBlueprintEditor"
+                >
+                  Edit blueprint
+                </v-btn>
+                <v-btn
                   v-if="activeStepControls.showFormSubmit"
                   color="primary"
                   variant="flat"
                   :loading="issueSessionBusy"
-                  :disabled="!activeStepControls.canSubmitForm"
+                  :disabled="!canUseFormSubmitButton"
                   :prepend-icon="mdiPlay"
                   @click="submitCurrentForm($event)"
                 >
@@ -341,15 +575,15 @@
                   {{ alternateActionButtonLabel(alternateAction) }}
                 </v-btn>
                 <v-btn
-                  v-if="activeStepControls.showGoNext"
+                  v-if="showPersistentGoNextButton"
                   color="primary"
                   variant="flat"
                   :loading="issueSessionBusy"
-                  :disabled="!activeStepControls.canGoNext"
+                  :disabled="!canUsePersistentGoNextButton"
                   :prepend-icon="mdiPlay"
                   @click="goToNextStep"
                 >
-                  Go to next step
+                  Next
                 </v-btn>
               </div>
               <p
@@ -357,6 +591,12 @@
                 class="text-caption text-medium-emphasis mb-0"
               >
                 {{ codexPromptStatusMessage }}
+              </p>
+              <p
+                v-if="syncMainCheckoutUnavailableMessage"
+                class="text-caption text-medium-emphasis mb-0"
+              >
+                {{ syncMainCheckoutUnavailableMessage }}
               </p>
 
               <div
@@ -490,12 +730,14 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { html as renderDiffHtml } from "diff2html";
 import "diff2html/bundles/css/diff2html.min.css";
 import {
+  mdiCheckCircleOutline,
   mdiClose,
   mdiFileDocumentOutline,
   mdiFileCompare,
   mdiFolderOutline,
   mdiGithub,
   mdiIdentifier,
+  mdiPencilOutline,
   mdiPlay,
   mdiPlayCircleOutline,
   mdiPlus,
@@ -503,6 +745,7 @@ import {
   mdiRobotOutline,
   mdiSend,
   mdiSourceBranch,
+  mdiSync,
 } from "@mdi/js";
 import CodexSessionTerminal from "@/components/studio/CodexSessionTerminal.vue";
 import AppTestTerminal from "@/components/studio/AppTestTerminal.vue";
@@ -515,7 +758,12 @@ import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
 import StudioLongTextReview from "@/components/studio/StudioLongTextReview.vue";
 import { useIssueSessions } from "@/composables/useIssueSessions.js";
 import {
+  readIssueSessionBlueprint,
   readIssueSessionDiff,
+  readIssueSessionPullRequestDraft,
+  saveIssueSessionBlueprint,
+  saveIssueSessionIssueDraft,
+  saveIssueSessionPullRequestDraft,
   saveIssueSessionCodexPromptHandoff
 } from "@/lib/studioApi.js";
 import {
@@ -523,9 +771,15 @@ import {
   isAbandonedIssueSession,
   isClosedIssueSession,
   isOpenIssueSession,
+  issueSessionActionSubmitsCodexPrompt,
+  issueSessionCanCreateGithubPullRequest,
+  issueSessionCanCreateGithubIssue,
   issueSessionCodexPromptActionLabel,
   issueSessionDisplayTitle,
   issueSessionFacts,
+  issueSessionHasGithubIssue,
+  issueSessionHasIssueDraft,
+  issueSessionHasPullRequestDraft,
   issueSessionStatusColor,
   issueSessionStatusLabel,
   shouldSendIssueSessionCodexPrompt,
@@ -565,8 +819,17 @@ const promptInjectionRequestBySessionId = ref({});
 const promptInjectionRequestSignatureBySessionId = ref({});
 const promptInjectionSignatureBySessionId = ref({});
 const promptInjectionOutputStartBySignature = ref({});
+const codexTerminalActiveBySessionId = ref({});
 const codexPromptOverrideBySessionId = ref({});
 const alternateActionInputValues = ref({});
+const draftPollTimer = ref(null);
+const issueEditorOpen = ref(false);
+const issueEditorTitle = ref("");
+const issueEditorText = ref("");
+const blueprintEditorOpen = ref(false);
+const blueprintEditorText = ref("");
+const pullRequestEditorOpen = ref(false);
+const pullRequestEditorText = ref("");
 
 const {
   abandonSelectedSession,
@@ -593,9 +856,32 @@ const {
 } = useIssueSessions();
 
 const INITIAL_ISSUE_PROMPT_STEP_ID = "issue_prompt_rendered";
+const PROMPT_STEP_ACTION_COMMAND_IDS = new Set([
+  "create_pull_request_file",
+  "create_issue_file",
+  "define_issue",
+  "execute_plan",
+  "make_plan",
+  "run_automated_checks",
+  "run_deep_ui_check",
+  "update_blueprint"
+]);
+const SETUP_AUTO_ADVANCE_STEP_IDS = new Set([
+  "changes_committed",
+  "dependencies_installed",
+  "worktree_created"
+]);
+const CODEX_TERMINAL_ACTIVITY_IDLE_MS = 1500;
+const codexTerminalActivityTimersBySessionId = new Map();
+const visibleStepDefinitions = computed(() => {
+  const currentStep = String(selectedSession.value?.currentStep || "").trim();
+  return (stepDefinitions.value || []).filter((step) => {
+    return step.id !== "review_changes_accepted" || currentStep === "review_changes_accepted";
+  });
+});
 
 const orderedStepDefinitions = computed(() => {
-  return groupedIssueSessionSteps(stepDefinitions.value || []);
+  return groupedIssueSessionSteps(visibleStepDefinitions.value);
 });
 
 const timelineSteps = computed(() => {
@@ -604,7 +890,7 @@ const timelineSteps = computed(() => {
     currentStepId: displayCurrentStepId.value,
     isOpen: Boolean(selectedSession.value && isOpenIssueSession(selectedSession.value)),
     session: selectedSession.value || {},
-    stepDefinitions: stepDefinitions.value || []
+    stepDefinitions: visibleStepDefinitions.value
   });
 });
 
@@ -673,9 +959,12 @@ const isCodexPromptInjection = computed(() => {
   return hasCodexPromptHandoff.value && Boolean(selectedSession.value?.prompt);
 });
 
+const selectedCodexPromptAlreadyRequested = computed(() => {
+  return sessionPromptAlreadyRequested(selectedSession.value || {});
+});
+
 const hasManualCodexPromptAction = computed(() => {
-  return shouldUseManualIssueSessionCodexPrompt(selectedSession.value || {}) &&
-    !selectedCodexPromptAlreadyRequested.value;
+  return shouldUseManualIssueSessionCodexPrompt(selectedSession.value || {});
 });
 
 const manualCodexPromptButtonLabel = computed(() => {
@@ -686,13 +975,34 @@ const isReviewDeslopStep = computed(() => {
   return ["review_prompt_rendered", "review_changes_accepted"].includes(selectedSession.value?.currentStep);
 });
 
+const abandonDialogBody = computed(() => {
+  if (issueSessionHasGithubIssue(selectedSession.value || {})) {
+    return "This will abandon the selected session, close its Codex terminal, and close its GitHub issue.";
+  }
+  return "This will abandon the selected session and close its Codex terminal.";
+});
+
 const activeStepCodexWorking = computed(() => {
-  return sessionPromptInjectionPending(selectedSession.value || {});
+  const sessionId = selectedSession.value?.sessionId || "";
+  return Boolean(
+    sessionPromptInjectionPending(selectedSession.value || {}) ||
+    codexTerminalActiveBySessionId.value[sessionId] === true
+  );
+});
+
+const selectedSessionCodexPromptSendBlocked = computed(() => {
+  return activeStepCodexWorking.value;
 });
 
 const codexPromptStatusMessage = computed(() => {
   if (!selectedCodexPromptAlreadyRequested.value) {
     return "";
+  }
+  if (selectedSessionAwaitingIssueDraftRefresh.value) {
+    return "Waiting for issue.md and issue_title. Studio checks every second.";
+  }
+  if (selectedSessionAwaitingPullRequestDraftRefresh.value) {
+    return "Waiting for pull_request.md. Studio checks every second.";
   }
   return "Review the Codex terminal output, then continue when ready.";
 });
@@ -743,7 +1053,341 @@ const codexPromptUtilityActions = computed(() => {
 });
 
 const codexPromptUtilityActionDisabled = computed(() => {
-  return selectedSessionTerminalBlocked.value || issueSessionBusy.value || activeStepCodexWorking.value;
+  return selectedSessionTerminalBlocked.value ||
+    issueSessionBusy.value ||
+    selectedSessionCodexPromptSendBlocked.value;
+});
+
+const selectedStepActionSubmitsCodexPrompt = computed(() => {
+  return issueSessionActionSubmitsCodexPrompt(selectedSession.value || {}, selectedStepAction.value || {});
+});
+
+const isDefineCreateIssueStep = computed(() => {
+  return ["issue_created", INITIAL_ISSUE_PROMPT_STEP_ID].includes(selectedSession.value?.currentStep);
+});
+
+const issueDefinitionFormOpen = computed(() => {
+  return selectedSession.value?.currentStep === INITIAL_ISSUE_PROMPT_STEP_ID &&
+    selectedSession.value?.issueDefinitionRequested !== true;
+});
+
+const showDefineCreateIssueFollowupButtons = computed(() => {
+  return Boolean(isDefineCreateIssueStep.value && !issueDefinitionFormOpen.value);
+});
+
+const issueFileAlreadyCreated = computed(() => {
+  return issueSessionHasIssueDraft(selectedSession.value || {});
+});
+
+const showCreateIssueFileButton = computed(() => {
+  return showDefineCreateIssueFollowupButtons.value;
+});
+
+const canCreateIssueFileButton = computed(() => {
+  return Boolean(
+    showCreateIssueFileButton.value &&
+    !issueFileAlreadyCreated.value &&
+    !issueSessionBusy.value &&
+    !isTerminalSession.value &&
+    !selectedSessionTerminalBlocked.value &&
+    !selectedSessionCodexPromptSendBlocked.value
+  );
+});
+
+const showCreateGithubIssueButton = computed(() => {
+  const session = selectedSession.value || {};
+  return Boolean(
+    session.currentStep === "issue_submitted" &&
+    isOpenIssueSession(session)
+  );
+});
+
+const canCreateGithubIssueButton = computed(() => {
+  return Boolean(
+    issueSessionCanCreateGithubIssue(selectedSession.value || {}) &&
+    !issueSessionBusy.value
+  );
+});
+
+const showEditIssueDraftButton = computed(() => {
+  const session = selectedSession.value || {};
+  return Boolean(
+    session.currentStep === "issue_submitted" &&
+    isOpenIssueSession(session)
+  );
+});
+
+const selectedSessionHasIssueDraft = computed(() => {
+  return issueSessionHasIssueDraft(selectedSession.value || {});
+});
+
+const canEditIssueDraftButton = computed(() => {
+  return Boolean(
+    showEditIssueDraftButton.value &&
+    selectedSessionHasIssueDraft.value &&
+    !issueSessionHasGithubIssue(selectedSession.value || {}) &&
+    !issueSessionBusy.value
+  );
+});
+
+const showEditPullRequestButton = computed(() => {
+  const session = selectedSession.value || {};
+  return Boolean(
+    session.currentStep === "pr_created" &&
+    !session.prUrl &&
+    isOpenIssueSession(session)
+  );
+});
+
+const selectedSessionHasPullRequestDraft = computed(() => {
+  return issueSessionHasPullRequestDraft(selectedSession.value || {});
+});
+
+const canEditPullRequestButton = computed(() => {
+  return Boolean(
+    showEditPullRequestButton.value &&
+    selectedSessionHasPullRequestDraft.value &&
+    !issueSessionBusy.value &&
+    !activeStepCodexWorking.value &&
+    !selectedSessionTerminalBlocked.value
+  );
+});
+
+const showCreateGithubPullRequestButton = computed(() => {
+  const session = selectedSession.value || {};
+  return Boolean(
+    session.currentStep === "pr_created" &&
+    !session.prUrl &&
+    isOpenIssueSession(session)
+  );
+});
+
+const canCreateGithubPullRequestButton = computed(() => {
+  return Boolean(
+    issueSessionCanCreateGithubPullRequest(selectedSession.value || {}) &&
+    !issueSessionBusy.value &&
+    !activeStepCodexWorking.value &&
+    !selectedSessionTerminalBlocked.value
+  );
+});
+
+const showPrepareForMergeButton = computed(() => {
+  const session = selectedSession.value || {};
+  return Boolean(
+    session.currentStep === "pr_merge_prepared" &&
+    isOpenIssueSession(session)
+  );
+});
+
+const canPrepareForMergeButton = computed(() => {
+  return Boolean(
+    showPrepareForMergeButton.value &&
+    selectedSession.value?.prUrl &&
+    selectedSession.value?.prOutcome?.outcome !== "merged" &&
+    !issueSessionBusy.value &&
+    !activeStepCodexWorking.value &&
+    !selectedSessionTerminalBlocked.value
+  );
+});
+
+const showMergePullRequestButton = computed(() => {
+  const session = selectedSession.value || {};
+  return Boolean(
+    session.currentStep === "pr_merge_prepared" &&
+    isOpenIssueSession(session)
+  );
+});
+
+const canMergePullRequestButton = computed(() => {
+  return Boolean(
+    showMergePullRequestButton.value &&
+    selectedSession.value?.prUrl &&
+    selectedSession.value?.prOutcome?.outcome !== "merged" &&
+    !issueSessionBusy.value &&
+    !activeStepCodexWorking.value &&
+    !selectedSessionTerminalBlocked.value
+  );
+});
+
+const showSyncMainCheckoutButton = computed(() => {
+  const session = selectedSession.value || {};
+  return Boolean(
+    session.currentStep === "main_checkout_synced" &&
+    isOpenIssueSession(session)
+  );
+});
+
+const canSyncMainCheckoutButton = computed(() => {
+  return Boolean(
+    showSyncMainCheckoutButton.value &&
+    selectedSession.value?.prUrl &&
+    selectedSession.value?.prOutcome?.outcome === "merged" &&
+    !selectedSession.value?.mainCheckoutSync?.status &&
+    !issueSessionBusy.value &&
+    !activeStepCodexWorking.value &&
+    !selectedSessionTerminalBlocked.value
+  );
+});
+
+const showFinishSessionButton = computed(() => {
+  const session = selectedSession.value || {};
+  return Boolean(
+    session.currentStep === "session_finished" &&
+    isOpenIssueSession(session)
+  );
+});
+
+const canFinishSessionButton = computed(() => {
+  return Boolean(
+    showFinishSessionButton.value &&
+    !issueSessionBusy.value &&
+    !activeStepCodexWorking.value &&
+    !selectedSessionTerminalBlocked.value
+  );
+});
+
+const syncMainCheckoutUnavailableMessage = computed(() => {
+  const session = selectedSession.value || {};
+  if (session.currentStep !== "main_checkout_synced" || session.prOutcome?.outcome === "merged") {
+    return "";
+  }
+  return "Main checkout sync is only available after a successful PR merge.";
+});
+
+const showEditBlueprintButton = computed(() => {
+  const session = selectedSession.value || {};
+  return Boolean(
+    session.currentStep === "blueprint_updated" &&
+    isOpenIssueSession(session)
+  );
+});
+
+const canEditBlueprintButton = computed(() => {
+  return Boolean(
+    showEditBlueprintButton.value &&
+    !issueSessionBusy.value &&
+    !activeStepCodexWorking.value &&
+    !selectedSessionTerminalBlocked.value
+  );
+});
+
+const issueEditorSaveDisabled = computed(() => {
+  return issueSessionBusy.value ||
+    !String(issueEditorTitle.value || "").trim() ||
+    !String(issueEditorText.value || "").trim();
+});
+
+const blueprintEditorSaveDisabled = computed(() => {
+  return issueSessionBusy.value ||
+    activeStepCodexWorking.value ||
+    !String(blueprintEditorText.value || "").trim();
+});
+
+const pullRequestEditorSaveDisabled = computed(() => {
+  return issueSessionBusy.value ||
+    activeStepCodexWorking.value ||
+    !String(pullRequestEditorText.value || "").trim();
+});
+
+const showPersistentGoNextButton = computed(() => {
+  const session = selectedSession.value || {};
+  return Boolean(
+    session.currentStep &&
+    isOpenIssueSession(session) &&
+    (
+      session.nextCommand ||
+      session.currentStep === "issue_submitted" ||
+      session.currentStep === "plan_executed" ||
+      showDefineCreateIssueFollowupButtons.value
+    )
+  );
+});
+
+const canUsePersistentGoNextButton = computed(() => {
+  if (showDefineCreateIssueFollowupButtons.value && !issueFileAlreadyCreated.value) {
+    return false;
+  }
+  return Boolean(
+    showPersistentGoNextButton.value &&
+    selectedSession.value?.nextCommand &&
+    !issueSessionBusy.value &&
+    !isTerminalSession.value &&
+    !selectedSessionCodexPromptSendBlocked.value
+  );
+});
+
+const showPrimaryExecuteStepButton = computed(() => {
+  if (!activeStepControls.value.showExecuteStep) {
+    return false;
+  }
+  if (showDefineCreateIssueFollowupButtons.value) {
+    return false;
+  }
+  return ![
+    "issue_submitted",
+    "main_checkout_synced",
+    "pr_created",
+    "pr_merge_prepared",
+    "session_finished"
+  ].includes(selectedSession.value?.currentStep);
+});
+
+const defineIssueAlreadySubmitted = computed(() => {
+  return selectedSession.value?.currentStep === INITIAL_ISSUE_PROMPT_STEP_ID &&
+    selectedSession.value?.issueDefinitionRequested === true;
+});
+
+const canUsePrimaryExecuteStepButton = computed(() => {
+  return Boolean(activeStepControls.value.canExecuteStep && !defineIssueAlreadySubmitted.value);
+});
+
+const canUseFormSubmitButton = computed(() => {
+  return Boolean(activeStepControls.value.canSubmitForm && !defineIssueAlreadySubmitted.value);
+});
+
+const selectedSessionAwaitingIssueDraftRefresh = computed(() => {
+  return selectedSession.value?.currentStep === "issue_created" &&
+    !issueSessionHasGithubIssue(selectedSession.value || {}) &&
+    !issueSessionHasIssueDraft(selectedSession.value || {});
+});
+
+const selectedSessionAwaitingPullRequestDraftRefresh = computed(() => {
+  return selectedSession.value?.currentStep === "final_report_created" &&
+    !issueSessionHasPullRequestDraft(selectedSession.value || {});
+});
+
+const selectedSessionAwaitingDraftRefresh = computed(() => {
+  return selectedSessionAwaitingIssueDraftRefresh.value ||
+    selectedSessionAwaitingPullRequestDraftRefresh.value;
+});
+
+const selectedSessionStepReadyToAdvance = computed(() => {
+  const session = selectedSession.value || {};
+  if (session.currentStep === "worktree_created") {
+    return session.worktreeReady === true;
+  }
+  if (session.currentStep === "dependencies_installed") {
+    return session.dependencyInstall?.ready === true && session.dependencyInstall?.installed !== true;
+  }
+  if (session.currentStep === "issue_prompt_rendered") {
+    return issueSessionHasIssueDraft(session);
+  }
+  if (session.currentStep === "issue_created") {
+    return issueSessionHasIssueDraft(session);
+  }
+  if (session.currentStep === "issue_submitted") {
+    return issueSessionHasGithubIssue(session);
+  }
+  if (session.currentStep === "changes_committed") {
+    return Boolean(session.acceptedChangesCommit?.commit);
+  }
+  if (session.currentStep === "final_report_created") {
+    return issueSessionHasPullRequestDraft(session);
+  }
+  if (session.currentStep === "pr_created") {
+    return Boolean(session.prUrl);
+  }
+  return false;
 });
 
 const activeAlternateActions = computed(() => {
@@ -845,9 +1489,9 @@ function sessionPromptAlreadyRequested(session = {}) {
   return sessionPromptAlreadyInjected(session) || sessionPromptInjectionPending(session);
 }
 
-const selectedCodexPromptAlreadyRequested = computed(() => {
-  return sessionPromptAlreadyRequested(selectedSession.value || {});
-});
+function sessionCodexPromptSendBlocked(session = {}) {
+  return sessionPromptInjectionPending(session);
+}
 
 const codexPromptRequestedMessage = computed(() => {
   if (!selectedCodexPromptAlreadyRequested.value) {
@@ -904,29 +1548,29 @@ const activeStepControls = computed(() => {
     codexPromptAlreadyRequested: selectedCodexPromptAlreadyRequested.value,
     codexPromptInjectionReady: isCodexPromptInjection.value,
     codexWorking: activeStepCodexWorking.value,
+    executeStepSubmitsPrompt: selectedStepActionSubmitsCodexPrompt.value,
+    formSubmitsPrompt: selectedStepActionSubmitsCodexPrompt.value,
     hasChoiceForm: isChoiceStep.value,
     hasExclusiveTextAlternateAction: exclusiveTextAlternateActions.value.length > 0,
     hasTextForm: isTextStep.value,
     isTerminalSession: isTerminalSession.value,
+    promptSendBlocked: selectedSessionCodexPromptSendBlocked.value,
     selectedSessionId: selectedSession.value?.sessionId || "",
     selectedSessionNeedsSetupTerminal: selectedSessionNeedsSetupTerminal.value,
     selectedStepInputType: selectedStepInput.value?.type || "none",
+    stepReadyToAdvance: selectedSessionStepReadyToAdvance.value,
     terminalBlocked: selectedSessionNeedsSetupTerminal.value ? false : selectedSessionTerminalBlocked.value
   });
 });
 
 const currentActionButtonLabel = computed(() => {
+  if (issueDefinitionFormOpen.value) {
+    return "Send prompt";
+  }
   return selectedStepAction.value?.label || selectedStepAction.value?.buttonLabel || "Run Step";
 });
 
 const executeStepButtonLabel = computed(() => {
-  if (
-    selectedStepAction.value?.kind === "codex_prompt" &&
-    selectedStepAutomationMode.value === "codex_prompt" &&
-    !selectedCodexPromptAlreadyRequested.value
-  ) {
-    return "Start task";
-  }
   return currentActionButtonLabel.value || "Execute step";
 });
 
@@ -1020,6 +1664,14 @@ function alternateActionButtonLabel(action = {}) {
 
 function alternateActionDisabled(action = {}) {
   const inputType = String(action?.input?.type || "none").trim();
+  const submitsPrompt = issueSessionActionSubmitsCodexPrompt(selectedSession.value || {}, action);
+  if (submitsPrompt && (
+    selectedSessionTerminalBlocked.value ||
+    issueSessionBusy.value ||
+    selectedSessionCodexPromptSendBlocked.value
+  )) {
+    return true;
+  }
   if (inputType === "none") {
     return issueSessionBusy.value || activeStepCodexWorking.value;
   }
@@ -1044,6 +1696,15 @@ function defaultStepPayload() {
   return submitOptions && typeof submitOptions === "object" && !Array.isArray(submitOptions)
     ? { ...submitOptions }
     : {};
+}
+
+function selectedPromptStepActionCommand() {
+  const commands = Array.isArray(selectedSession.value?.actionCommands)
+    ? selectedSession.value.actionCommands
+    : [];
+  return String(
+    commands.find((command) => PROMPT_STEP_ACTION_COMMAND_IDS.has(String(command?.id || "").trim()))?.id || ""
+  );
 }
 
 function clearAlternateActionDraft(action = {}) {
@@ -1225,6 +1886,7 @@ function forgetTerminalSession(sessionId) {
     return;
   }
   disposeCodexCompletionWatchersForSession(sessionId);
+  clearCodexTerminalActivity(sessionId);
   const {
     [sessionId]: _terminalSession,
     ...remainingTerminalSessions
@@ -1286,6 +1948,14 @@ function pruneTerminalSessions() {
   promptInjectionSignatureBySessionId.value = Object.fromEntries(
     Object.entries(promptInjectionSignatureBySessionId.value).filter(([sessionId]) => sessionIds.has(sessionId))
   );
+  for (const sessionId of codexTerminalActivityTimersBySessionId.keys()) {
+    if (!sessionIds.has(sessionId)) {
+      clearCodexTerminalActivity(sessionId);
+    }
+  }
+  codexTerminalActiveBySessionId.value = Object.fromEntries(
+    Object.entries(codexTerminalActiveBySessionId.value).filter(([sessionId]) => sessionIds.has(sessionId))
+  );
   promptInjectionOutputStartBySignature.value = Object.fromEntries(
     Object.entries(promptInjectionOutputStartBySignature.value)
       .filter(([key]) => sessionIds.has(key.split(":")[0]))
@@ -1299,16 +1969,56 @@ function pruneTerminalSessions() {
   );
 }
 
+function clearCodexTerminalActivity(sessionId) {
+  if (!sessionId) {
+    return;
+  }
+  const timer = codexTerminalActivityTimersBySessionId.get(sessionId);
+  if (timer) {
+    clearTimeout(timer);
+    codexTerminalActivityTimersBySessionId.delete(sessionId);
+  }
+  const {
+    [sessionId]: _active,
+    ...remainingActiveSessions
+  } = codexTerminalActiveBySessionId.value;
+  codexTerminalActiveBySessionId.value = remainingActiveSessions;
+}
+
+function markCodexTerminalActivity(sessionId) {
+  if (!sessionId) {
+    return;
+  }
+  const existingTimer = codexTerminalActivityTimersBySessionId.get(sessionId);
+  if (existingTimer) {
+    clearTimeout(existingTimer);
+  }
+  codexTerminalActiveBySessionId.value = {
+    ...codexTerminalActiveBySessionId.value,
+    [sessionId]: true
+  };
+  codexTerminalActivityTimersBySessionId.set(sessionId, setTimeout(() => {
+    clearCodexTerminalActivity(sessionId);
+  }, CODEX_TERMINAL_ACTIVITY_IDLE_MS));
+}
+
 function recordCodexTerminalOutput(sessionId, output) {
   const nextOutput = String(output || "");
+  const previousOutput = String(codexTerminalOutputBySessionId.value[sessionId] || "");
   codexTerminalOutputBySessionId.value = {
     ...codexTerminalOutputBySessionId.value,
     [sessionId]: nextOutput
   };
+  if (nextOutput !== previousOutput) {
+    markCodexTerminalActivity(sessionId);
+  }
 }
 
-function recordCodexTerminalInput(sessionId) {
-  void sessionId;
+function recordCodexTerminalInput(sessionId, input = "") {
+  if (!sessionId || !String(input || "")) {
+    return;
+  }
+  markCodexTerminalActivity(sessionId);
 }
 
 function recordCodexPromptInjected(sessionId, event = {}) {
@@ -1331,6 +2041,7 @@ function recordCodexPromptInjected(sessionId, event = {}) {
       : {})
   };
   const signature = trackCodexPromptInjection(trackedSession, event);
+  markCodexTerminalActivity(sessionId);
   if (signature && (!eventPrompt || eventPrompt === currentSessionPrompt)) {
     void saveIssueSessionCodexPromptHandoff(sessionId, {
       outputStart: promptInjectionOutputStartBySignature.value[signature] || 0,
@@ -1380,6 +2091,7 @@ function recordCodexPromptInjectionFailed(sessionId, event = {}) {
     return;
   }
   clearPromptInjectionRequest(sessionId);
+  clearCodexTerminalActivity(sessionId);
   copyStatus.value = String(event?.error || "Codex prompt injection failed.");
 }
 
@@ -1395,7 +2107,13 @@ async function resendCurrentCodexPromptRequest() {
   const session = selectedSession.value || {};
   const sessionId = session.sessionId || "";
   const prompt = codexPromptTextForSession(session);
-  if (!sessionId || !prompt || selectedSessionTerminalBlocked.value || issueSessionBusy.value) {
+  if (
+    !sessionId ||
+    !prompt ||
+    selectedSessionTerminalBlocked.value ||
+    issueSessionBusy.value ||
+    selectedSessionCodexPromptSendBlocked.value
+  ) {
     return;
   }
   await injectCodexPromptText(session, prompt);
@@ -1415,6 +2133,39 @@ async function handleStepResponse(response, {
     await requestCodexPromptInjection(response);
   }
   return response;
+}
+
+function stopDraftPolling() {
+  if (!draftPollTimer.value) {
+    return;
+  }
+  clearInterval(draftPollTimer.value);
+  draftPollTimer.value = null;
+}
+
+async function refreshSelectedDraft() {
+  const sessionId = selectedSessionId.value;
+  const waitingForIssueDraft = selectedSessionAwaitingIssueDraftRefresh.value;
+  const waitingForPullRequestDraft = selectedSessionAwaitingPullRequestDraftRefresh.value;
+  if (!sessionId || (!waitingForIssueDraft && !waitingForPullRequestDraft)) {
+    return;
+  }
+  const refreshedSession = await selectSession(sessionId, { preserveList: true });
+  if (
+    (waitingForIssueDraft && issueSessionHasIssueDraft(refreshedSession || {})) ||
+    (waitingForPullRequestDraft && issueSessionHasPullRequestDraft(refreshedSession || {}))
+  ) {
+    copyStatus.value = "";
+    stopDraftPolling();
+  }
+}
+
+function startDraftPolling() {
+  stopDraftPolling();
+  draftPollTimer.value = setInterval(() => {
+    void refreshSelectedDraft();
+  }, 1000);
+  void refreshSelectedDraft();
 }
 
 async function runAlternateAction(action = {}) {
@@ -1437,15 +2188,268 @@ async function runCodexPromptUtilityAction(action = {}) {
 }
 
 async function goToNextStep() {
-  if (!activeStepControls.value.canGoNext) {
+  if (!canUsePersistentGoNextButton.value) {
     return;
   }
-  const response = await runSelectedStep(defaultStepPayload());
+  const response = await runSelectedStep({
+    ...defaultStepPayload(),
+    advance: true
+  }, {
+    includeStepInput: false
+  });
   await handleStepResponse(response);
 }
 
+async function autoAdvanceSetupStep(seedSession = selectedSession.value) {
+  const sessionId = seedSession?.sessionId || selectedSessionId.value;
+  if (
+    !sessionId ||
+    sessionId !== selectedSessionId.value ||
+    !SETUP_AUTO_ADVANCE_STEP_IDS.has(seedSession?.currentStep)
+  ) {
+    return false;
+  }
+  const response = await runSelectedStep({
+    advance: true
+  }, {
+    includeStepInput: false
+  });
+  await handleStepResponse(response);
+  return response?.ok !== false;
+}
+
+async function createIssueFileForSelectedSession() {
+  if (!canCreateIssueFileButton.value) {
+    return;
+  }
+  const response = await runSelectedStep({
+    actionCommand: "create_issue_file"
+  }, {
+    includeStepInput: false
+  });
+  await handleStepResponse(response, {
+    forcePromptInjection: true
+  });
+}
+
+async function createGithubIssueForSelectedSession() {
+  if (!canCreateGithubIssueButton.value) {
+    return;
+  }
+  const response = await runSelectedStep({
+    actionCommand: "create_issue_on_gh"
+  }, {
+    includeStepInput: false
+  });
+  await handleStepResponse(response);
+}
+
+async function createGithubPullRequestForSelectedSession() {
+  if (!canCreateGithubPullRequestButton.value) {
+    return;
+  }
+  const response = await runSelectedStep({
+    actionCommand: "create_pr_on_gh"
+  }, {
+    includeStepInput: false
+  });
+  await handleStepResponse(response);
+}
+
+async function prepareSelectedPullRequestForMerge() {
+  if (!canPrepareForMergeButton.value) {
+    return;
+  }
+  const response = await runSelectedStep({
+    actionCommand: "prepare_for_merge"
+  }, {
+    includeStepInput: false
+  });
+  await handleStepResponse(response, {
+    forcePromptInjection: true
+  });
+}
+
+async function mergeSelectedPullRequest() {
+  if (!canMergePullRequestButton.value) {
+    return;
+  }
+  const response = await runSelectedStep({
+    actionCommand: "merge_pr"
+  }, {
+    includeStepInput: false
+  });
+  await handleStepResponse(response);
+}
+
+async function syncMainCheckoutForSelectedSession() {
+  if (!canSyncMainCheckoutButton.value) {
+    return;
+  }
+  const response = await runSelectedStep({
+    actionCommand: "sync_main_checkout"
+  }, {
+    includeStepInput: false
+  });
+  await handleStepResponse(response);
+}
+
+async function finishSelectedSession() {
+  if (!canFinishSessionButton.value) {
+    return;
+  }
+  const finishedSessionId = selectedSessionId.value;
+  const response = await runSelectedStep({
+    actionCommand: "finish_session"
+  }, {
+    includeStepInput: false
+  });
+  await handleStepResponse(response);
+  if (response?.status === "finished") {
+    forgetTerminalSession(finishedSessionId);
+  }
+}
+
+function openIssueEditor() {
+  if (!canEditIssueDraftButton.value) {
+    return;
+  }
+  issueEditorTitle.value = String(selectedSession.value?.issueTitle || "").trim();
+  issueEditorText.value = String(selectedSession.value?.issueText || "").trim();
+  issueEditorOpen.value = true;
+}
+
+async function saveEditedIssueDraft() {
+  const sessionId = selectedSessionId.value;
+  if (!sessionId || issueEditorSaveDisabled.value) {
+    return;
+  }
+  issueSessionBusy.value = true;
+  copyStatus.value = "";
+  try {
+    const response = await saveIssueSessionIssueDraft(sessionId, {
+      issueText: issueEditorText.value,
+      issueTitle: issueEditorTitle.value
+    });
+    applyIssueSessionUpdate(response);
+    if (response?.ok === false) {
+      copyStatus.value = response.errors?.[0]?.message || "Issue draft could not be saved.";
+      return;
+    }
+    issueEditorOpen.value = false;
+    copyStatus.value = "Issue draft saved.";
+    await loadIssueSessions();
+  } catch (error) {
+    copyStatus.value = String(error?.message || error || "Issue draft could not be saved.");
+  } finally {
+    issueSessionBusy.value = false;
+  }
+}
+
+async function openPullRequestEditor() {
+  const sessionId = selectedSessionId.value;
+  if (!sessionId || !canEditPullRequestButton.value) {
+    return;
+  }
+  issueSessionBusy.value = true;
+  copyStatus.value = "";
+  try {
+    const response = await readIssueSessionPullRequestDraft(sessionId);
+    applyIssueSessionUpdate(response);
+    if (response?.ok === false) {
+      copyStatus.value = response.errors?.[0]?.message || "PR draft could not be loaded.";
+      return;
+    }
+    pullRequestEditorText.value = String(response?.pullRequestText || "");
+    pullRequestEditorOpen.value = true;
+  } catch (error) {
+    copyStatus.value = String(error?.message || error || "PR draft could not be loaded.");
+  } finally {
+    issueSessionBusy.value = false;
+  }
+}
+
+async function saveEditedPullRequestDraft() {
+  const sessionId = selectedSessionId.value;
+  if (!sessionId || pullRequestEditorSaveDisabled.value) {
+    return;
+  }
+  issueSessionBusy.value = true;
+  copyStatus.value = "";
+  try {
+    const response = await saveIssueSessionPullRequestDraft(sessionId, {
+      pullRequestText: pullRequestEditorText.value
+    });
+    applyIssueSessionUpdate(response);
+    if (response?.ok === false) {
+      copyStatus.value = response.errors?.[0]?.message || "PR draft could not be saved.";
+      return;
+    }
+    pullRequestEditorOpen.value = false;
+    copyStatus.value = "PR draft saved.";
+    await loadIssueSessions();
+  } catch (error) {
+    copyStatus.value = String(error?.message || error || "PR draft could not be saved.");
+  } finally {
+    issueSessionBusy.value = false;
+  }
+}
+
+async function openBlueprintEditor() {
+  const sessionId = selectedSessionId.value;
+  if (!sessionId || !canEditBlueprintButton.value) {
+    return;
+  }
+  issueSessionBusy.value = true;
+  copyStatus.value = "";
+  try {
+    const response = await readIssueSessionBlueprint(sessionId);
+    applyIssueSessionUpdate(response);
+    if (response?.ok === false) {
+      copyStatus.value = response.errors?.[0]?.message || "Blueprint could not be loaded.";
+      return;
+    }
+    blueprintEditorText.value = String(response?.blueprintText || "");
+    blueprintEditorOpen.value = true;
+  } catch (error) {
+    copyStatus.value = String(error?.message || error || "Blueprint could not be loaded.");
+  } finally {
+    issueSessionBusy.value = false;
+  }
+}
+
+async function saveEditedBlueprint() {
+  const sessionId = selectedSessionId.value;
+  if (!sessionId || blueprintEditorSaveDisabled.value) {
+    return;
+  }
+  issueSessionBusy.value = true;
+  copyStatus.value = "";
+  try {
+    const response = await saveIssueSessionBlueprint(sessionId, {
+      blueprintText: blueprintEditorText.value
+    });
+    applyIssueSessionUpdate(response);
+    if (response?.ok === false) {
+      copyStatus.value = response.errors?.[0]?.message || "Blueprint could not be saved.";
+      return;
+    }
+    blueprintEditorOpen.value = false;
+    copyStatus.value = "Blueprint saved.";
+    await loadIssueSessions();
+  } catch (error) {
+    copyStatus.value = String(error?.message || error || "Blueprint could not be saved.");
+  } finally {
+    issueSessionBusy.value = false;
+  }
+}
+
 async function executeCurrentStep() {
-  if (!activeStepControls.value.canExecuteStep) {
+  if (!canUsePrimaryExecuteStepButton.value) {
+    return;
+  }
+  if (selectedStepActionSubmitsCodexPrompt.value && selectedSessionCodexPromptSendBlocked.value) {
+    copyStatus.value = "Review the active Codex terminal output, then continue when ready.";
     return;
   }
   if (selectedSessionNeedsSetupTerminal.value) {
@@ -1454,9 +2458,48 @@ async function executeCurrentStep() {
     await setupTerminalRef.value?.start?.();
     return;
   }
+  if (selectedSession.value?.currentStep === "worktree_created") {
+    const response = await runSelectedStep({
+      sessionAction: "create_worktree"
+    }, {
+      includeStepInput: false
+    });
+    await handleStepResponse(response);
+    await autoAdvanceSetupStep(response);
+    return;
+  }
+  if (selectedSession.value?.currentStep === "changes_committed") {
+    const response = await runSelectedStep({
+      actionCommand: "commit_changes"
+    }, {
+      includeStepInput: false
+    });
+    await handleStepResponse(response);
+    await autoAdvanceSetupStep(response);
+    return;
+  }
+  const promptActionCommand = selectedPromptStepActionCommand();
+  if (selectedStepActionSubmitsCodexPrompt.value && promptActionCommand) {
+    if (
+      isCodexPromptInjection.value &&
+      selectedSession.value?.prompt &&
+      selectedStepAction.value?.kind === "codex_prompt"
+    ) {
+      await requestCodexPromptInjection();
+      return;
+    }
+    const response = await runSelectedStep({
+      actionCommand: promptActionCommand
+    }, {
+      includeStepInput: false
+    });
+    await handleStepResponse(response, {
+      forcePromptInjection: true
+    });
+    return;
+  }
   if (
     isCodexPromptInjection.value &&
-    !selectedCodexPromptAlreadyRequested.value &&
     selectedSession.value?.prompt &&
     selectedStepAction.value?.kind === "codex_prompt"
   ) {
@@ -1538,8 +2581,12 @@ async function handleSessionStepTerminalFinished(event = {}) {
   if (!event.sessionId || event.sessionId !== selectedSessionId.value) {
     return;
   }
-  await selectSession(event.sessionId, { preserveList: true });
-  await loadIssueSessions();
+  if (event.exitCode === 0) {
+    await autoAdvanceSetupStep(selectedSession.value);
+  } else {
+    await selectSession(event.sessionId, { preserveList: true });
+    await loadIssueSessions();
+  }
   const stillOnSetupStep = selectedSession.value?.sessionId === event.sessionId &&
     selectedSession.value?.currentStep === "dependencies_installed";
   if (!stillOnSetupStep) {
@@ -1621,6 +2668,10 @@ async function requestCodexPromptInjection(sessionOverride = null) {
     copyStatus.value = "No Codex prompt is ready for this step.";
     return;
   }
+  if (sessionCodexPromptSendBlocked(session)) {
+    copyStatus.value = "Review the active Codex terminal output, then continue when ready.";
+    return;
+  }
   activeSessionTerminalView.value = "codex";
   rememberTerminalSession(session);
   await nextTick();
@@ -1658,11 +2709,22 @@ async function injectCodexPromptText(session, promptText) {
   return true;
 }
 
-function submitCurrentForm(event = null) {
+async function submitCurrentForm(event = null) {
   if (event?.isTrusted !== true) {
     return;
   }
-  void runSelectedStep().then((response) => handleStepResponse(response));
+  if (!canUseFormSubmitButton.value) {
+    return;
+  }
+  if (selectedStepActionSubmitsCodexPrompt.value && selectedSessionCodexPromptSendBlocked.value) {
+    copyStatus.value = "Review the active Codex terminal output, then continue when ready.";
+    return;
+  }
+  const payload = selectedSession.value?.currentStep === "issue_prompt_rendered"
+    ? { actionCommand: "define_issue" }
+    : {};
+  const response = await runSelectedStep(payload);
+  await handleStepResponse(response);
 }
 
 watch(selectedSession, (session) => {
@@ -1692,11 +2754,25 @@ watch(issueSessions, () => {
   pruneTerminalSessions();
 });
 
+watch(selectedSessionAwaitingDraftRefresh, (waiting) => {
+  if (waiting) {
+    startDraftPolling();
+    return;
+  }
+  stopDraftPolling();
+}, {
+  immediate: true
+});
+
 onMounted(() => {
   void loadIssueSessions();
 });
 
 onBeforeUnmount(() => {
+  stopDraftPolling();
+  for (const sessionId of [...codexTerminalActivityTimersBySessionId.keys()]) {
+    clearCodexTerminalActivity(sessionId);
+  }
   emit("title-change", "");
 });
 
@@ -1786,6 +2862,11 @@ onBeforeUnmount(() => {
 
 .studio-issue-sessions__alternate-action :deep(.v-btn) {
   justify-self: start;
+}
+
+.studio-issue-sessions__issue-editor {
+  display: grid;
+  gap: 1rem;
 }
 
 .studio-issue-sessions__strip {

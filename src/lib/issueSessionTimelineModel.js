@@ -133,12 +133,6 @@ function issueSessionStepBadges(step = {}, {
       label: "Skipped"
     });
   }
-  if (step.id === currentStepId && currentAction.conditional) {
-    badges.push({
-      color: "info",
-      label: "Conditional"
-    });
-  }
   if (step.id === currentStepId && currentAction.retryable) {
     badges.push({
       color: "warning",
@@ -153,18 +147,6 @@ function issueSessionCurrentStepActionNotice(action = {}) {
     return {
       text: "This blocked step is retryable. Repair the reported issue, then run it again.",
       type: "warning"
-    };
-  }
-  if (action.conditional && action.skipReason) {
-    return {
-      text: `JSKIT can skip this conditional step: ${action.skipReason}`,
-      type: "info"
-    };
-  }
-  if (action.conditional) {
-    return {
-      text: "This is a conditional step. JSKIT decides whether it runs or records a skip based on session metadata.",
-      type: "info"
     };
   }
   return null;

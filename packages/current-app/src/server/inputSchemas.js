@@ -106,11 +106,52 @@ const rewindIssueSessionInputValidator = deepFreeze({
   mode: "patch"
 });
 
+const issueSessionDraftInputValidator = deepFreeze({
+  schema: createSchema({
+    issueText: {
+      type: "string",
+      noTrim: true,
+      required: true
+    },
+    issueTitle: {
+      type: "string",
+      noTrim: false,
+      required: true
+    }
+  }),
+  mode: "patch"
+});
+
+const issueSessionBlueprintInputValidator = deepFreeze({
+  schema: createSchema({
+    blueprintText: {
+      type: "string",
+      noTrim: true,
+      required: true
+    }
+  }),
+  mode: "patch"
+});
+
+const issueSessionPullRequestDraftInputValidator = deepFreeze({
+  schema: createSchema({
+    pullRequestText: {
+      type: "string",
+      noTrim: true,
+      required: true
+    }
+  }),
+  mode: "patch"
+});
+
 export {
   codexAttachmentInputValidator,
   codexPromptHandoffInputValidator,
   codexThreadInputValidator,
   currentAppQueryInputValidator,
+  issueSessionBlueprintInputValidator,
+  issueSessionDraftInputValidator,
+  issueSessionPullRequestDraftInputValidator,
   npmScriptTerminalInputValidator,
   rewindIssueSessionInputValidator,
   starredNpmScriptsInputValidator,

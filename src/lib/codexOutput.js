@@ -30,9 +30,45 @@ const CODEX_THREAD_ID_TOKEN_PATTERN = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-
 const CODEX_TRUST_PROMPT_PATTERN = /Do you trust the contents of this directory\?/u;
 const STUDIO_CONTEXT_START_MARKER = "[[JSKIT_STUDIO_CONTEXT_START]]";
 const STUDIO_CONTEXT_END_MARKER = "[[JSKIT_STUDIO_CONTEXT_END]]";
+const STUDIO_CONTEXT_INSTRUCTIONS = "JSKIT Studio context marker: follow the instructions inside this context block normally, but ignore the surrounding JSKIT_STUDIO_CONTEXT markers.";
+const ESCAPE_TERMINAL_STRING_INTRODUCERS = new Set(["]", "P", "X", "^", "_"]);
+const STRING_TERMINATORS = new Set([BELL_CHARACTER, STRING_TERMINATOR_CHARACTER]);
 
-function terminalControlSequenceEnd(value, index) {
-  const source = String(value || "");
+function findEscapedStringEnd(source, startIndex) {
+  for (let cursor = startIndex; cursor < source.length; cursor += 1) {
+    if (source[cursor] === BELL_CHARACTER) {
+      return cursor + 1;
+    }
+    if (source[cursor] === ESCAPE_CHARACTER && source[cursor + 1] === "\\") {
+      return cursor + 2;
+    }
+  }
+  return source.length;
+}
+
+function findCsiEnd(source, startIndex) {
+  for (let cursor = startIndex; cursor < source.length; cursor += 1) {
+    const code = source.charCodeAt(cursor);
+    if (code >= 0x40 && code <= 0x7e) {
+      return cursor + 1;
+    }
+  }
+  return source.length;
+}
+
+function findC1StringEnd(source, startIndex) {
+  for (let cursor = startIndex; cursor < source.length; cursor += 1) {
+    if (STRING_TERMINATORS.has(source[cursor])) {
+      return cursor + 1;
+    }
+    if (source[cursor] === ESCAPE_CHARACTER && source[cursor + 1] === "\\") {
+      return cursor + 2;
+    }
+  }
+  return source.length;
+}
+
+function terminalControlSequenceEnd(source, index) {
   const character = source[index] || "";
   if (!character) {
     return index;
@@ -40,49 +76,21 @@ function terminalControlSequenceEnd(value, index) {
 
   if (character === ESCAPE_CHARACTER) {
     const next = source[index + 1] || "";
-    if (next === "]" || ["P", "X", "^", "_"].includes(next)) {
-      for (let cursor = index + 2; cursor < source.length; cursor += 1) {
-        if (source[cursor] === BELL_CHARACTER) {
-          return cursor + 1;
-        }
-        if (source[cursor] === ESCAPE_CHARACTER && source[cursor + 1] === "\\") {
-          return cursor + 2;
-        }
-      }
-      return source.length;
+    if (ESCAPE_TERMINAL_STRING_INTRODUCERS.has(next)) {
+      return findEscapedStringEnd(source, index + 2);
     }
     if (next === "[") {
-      for (let cursor = index + 2; cursor < source.length; cursor += 1) {
-        const code = source.charCodeAt(cursor);
-        if (code >= 0x40 && code <= 0x7e) {
-          return cursor + 1;
-        }
-      }
-      return source.length;
+      return findCsiEnd(source, index + 2);
     }
     return Math.min(index + 2, source.length);
   }
 
   if (character === C1_CSI_CHARACTER) {
-    for (let cursor = index + 1; cursor < source.length; cursor += 1) {
-      const code = source.charCodeAt(cursor);
-      if (code >= 0x40 && code <= 0x7e) {
-        return cursor + 1;
-      }
-    }
-    return source.length;
+    return findCsiEnd(source, index + 1);
   }
 
   if (C1_TERMINAL_STRING_START_CHARACTERS.includes(character)) {
-    for (let cursor = index + 1; cursor < source.length; cursor += 1) {
-      if ([BELL_CHARACTER, STRING_TERMINATOR_CHARACTER].includes(source[cursor])) {
-        return cursor + 1;
-      }
-      if (source[cursor] === ESCAPE_CHARACTER && source[cursor + 1] === "\\") {
-        return cursor + 2;
-      }
-    }
-    return source.length;
+    return findC1StringEnd(source, index + 1);
   }
 
   return index;
@@ -131,12 +139,6 @@ function terminalVisibleTextMap(value) {
   };
 }
 
-function firstVisibleIndexAtOrAfterRawIndex(rawIndexes, rawIndex) {
-  const targetRawIndex = Math.max(0, Number(rawIndex || 0));
-  const index = rawIndexes.findIndex((candidate) => candidate >= targetRawIndex);
-  return index < 0 ? rawIndexes.length : index;
-}
-
 function rawIndexForVisibleOffset(rawIndexes, visibleOffset, fallbackRawIndex) {
   if (visibleOffset >= rawIndexes.length) {
     return fallbackRawIndex;
@@ -173,10 +175,30 @@ function stripStudioContextBlocksForDisplay(value) {
     }
     visibleCursor = end + STUDIO_CONTEXT_END_MARKER.length;
     rawCursor = rawIndexForVisibleOffset(rawIndexes, visibleCursor, source.length);
-    visibleCursor = firstVisibleIndexAtOrAfterRawIndex(rawIndexes, rawCursor);
   }
 
   return `${output}${source.slice(rawCursor)}`.replaceAll(STUDIO_CONTEXT_END_MARKER, "");
+}
+
+function hasStudioContextBlock(value) {
+  return String(value || "").includes(STUDIO_CONTEXT_START_MARKER);
+}
+
+function wrapPromptWithStudioContext(prompt, visiblePrompt = "") {
+  const source = String(prompt || "");
+  if (!source || hasStudioContextBlock(source)) {
+    return source;
+  }
+  const visible = String(visiblePrompt || "Run Codex prompt.").trim() || "Run Codex prompt.";
+  return [
+    visible,
+    "",
+    STUDIO_CONTEXT_START_MARKER,
+    STUDIO_CONTEXT_INSTRUCTIONS,
+    "",
+    source,
+    STUDIO_CONTEXT_END_MARKER
+  ].join("\n");
 }
 
 function isCodexThreadId(value) {
@@ -222,7 +244,9 @@ function extractCodexThreadId(output) {
 export {
   codexTrustPromptLooksActive,
   extractCodexThreadId,
+  hasStudioContextBlock,
   isCodexThreadId,
   stripStudioContextBlocksForDisplay,
-  stripTerminalControlSequences
+  stripTerminalControlSequences,
+  wrapPromptWithStudioContext
 };

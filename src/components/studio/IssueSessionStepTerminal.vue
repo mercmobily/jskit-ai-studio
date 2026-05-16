@@ -101,7 +101,7 @@ let terminalSetupPromise = null;
 let terminalStartPromise = null;
 let finishedEmittedForTerminalId = "";
 
-const FINISHED_TERMINAL_HOLD_MS = 2500;
+const FINISHED_TERMINAL_HOLD_MS = 1000;
 
 const sessionId = computed(() => props.session?.sessionId || "");
 const canRunSetupTerminal = computed(() => (

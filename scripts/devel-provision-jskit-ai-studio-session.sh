@@ -189,6 +189,20 @@ ensure_link_local_companions() {
   done
 }
 
+link_sibling_node_modules_to_worktree() {
+  local sibling_repo="$1"
+  local sibling_node_modules="$sibling_repo/node_modules"
+  local worktree_node_modules="$JSKIT_WORKTREE_ROOT/node_modules"
+
+  if [ ! -d "$worktree_node_modules" ]; then
+    fail "Session worktree dependencies are missing at $worktree_node_modules."
+  fi
+
+  rm -rf "$sibling_node_modules"
+  ln -s "$worktree_node_modules" "$sibling_node_modules"
+  log "Linked sibling node_modules to the session worktree install."
+}
+
 ensure_clean_local_source() {
   local name="$1"
   local source="$2"
@@ -263,6 +277,7 @@ clone_or_reuse_sibling() {
     printf '%s\n' "$dest" > "$WORKTREE_CONFIG_DIR/devel_jskit_ai_root"
     log "Linking jskit-ai packages into the Studio session worktree."
     (cd "$JSKIT_WORKTREE_ROOT" && npx --no-install jskit app link-local-packages --repo-root "$dest")
+    link_sibling_node_modules_to_worktree "$dest"
   fi
 }
 

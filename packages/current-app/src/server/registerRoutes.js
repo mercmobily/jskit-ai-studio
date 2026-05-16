@@ -4,6 +4,9 @@ import {
   codexPromptHandoffInputValidator,
   codexThreadInputValidator,
   currentAppQueryInputValidator,
+  issueSessionBlueprintInputValidator,
+  issueSessionDraftInputValidator,
+  issueSessionPullRequestDraftInputValidator,
   npmScriptTerminalInputValidator,
   rewindIssueSessionInputValidator,
   starredNpmScriptsInputValidator
@@ -263,6 +266,122 @@ function registerRoutes(
       }
       const response = await getCurrentAppService(app).inspectIssueSessionDiff(request.params.sessionId);
       reply.code(sessionStatusCode(response)).send(response);
+    }
+  );
+
+  router.register(
+    "PUT",
+    `${routeBase}/issue-sessions/:sessionId/issue-draft`,
+    {
+      auth: "public",
+      surface: normalizedRouteSurface,
+      meta: {
+        tags: ["studio", "issue-sessions"],
+        summary: "Edit a JSKIT issue-session draft."
+      },
+      body: issueSessionDraftInputValidator
+    },
+    async function (request, reply) {
+      if (!requireLocalCurrentAppRequest(request, reply)) {
+        return;
+      }
+      const response = await getCurrentAppService(app).saveIssueSessionIssueDraft(
+        request.params.sessionId,
+        requestBodyObject(request)
+      );
+      reply.code(sessionStatusCode(response, { missingStatus: 404 })).send(response);
+    }
+  );
+
+  router.register(
+    "GET",
+    `${routeBase}/issue-sessions/:sessionId/pull-request-draft`,
+    {
+      auth: "public",
+      surface: normalizedRouteSurface,
+      meta: {
+        tags: ["studio", "issue-sessions"],
+        summary: "Read a JSKIT issue-session pull request draft."
+      }
+    },
+    async function (request, reply) {
+      if (!requireLocalCurrentAppRequest(request, reply)) {
+        return;
+      }
+      const response = await getCurrentAppService(app).readIssueSessionPullRequestDraft(
+        request.params.sessionId
+      );
+      reply.code(sessionStatusCode(response, { missingStatus: 404 })).send(response);
+    }
+  );
+
+  router.register(
+    "PUT",
+    `${routeBase}/issue-sessions/:sessionId/pull-request-draft`,
+    {
+      auth: "public",
+      surface: normalizedRouteSurface,
+      meta: {
+        tags: ["studio", "issue-sessions"],
+        summary: "Edit a JSKIT issue-session pull request draft."
+      },
+      body: issueSessionPullRequestDraftInputValidator
+    },
+    async function (request, reply) {
+      if (!requireLocalCurrentAppRequest(request, reply)) {
+        return;
+      }
+      const response = await getCurrentAppService(app).saveIssueSessionPullRequestDraft(
+        request.params.sessionId,
+        requestBodyObject(request)
+      );
+      reply.code(sessionStatusCode(response, { missingStatus: 404 })).send(response);
+    }
+  );
+
+  router.register(
+    "GET",
+    `${routeBase}/issue-sessions/:sessionId/blueprint`,
+    {
+      auth: "public",
+      surface: normalizedRouteSurface,
+      meta: {
+        tags: ["studio", "issue-sessions"],
+        summary: "Read a JSKIT issue-session blueprint draft."
+      }
+    },
+    async function (request, reply) {
+      if (!requireLocalCurrentAppRequest(request, reply)) {
+        return;
+      }
+      const response = await getCurrentAppService(app).readIssueSessionBlueprint(
+        request.params.sessionId
+      );
+      reply.code(sessionStatusCode(response, { missingStatus: 404 })).send(response);
+    }
+  );
+
+  router.register(
+    "PUT",
+    `${routeBase}/issue-sessions/:sessionId/blueprint`,
+    {
+      auth: "public",
+      surface: normalizedRouteSurface,
+      meta: {
+        tags: ["studio", "issue-sessions"],
+        summary: "Edit a JSKIT issue-session blueprint draft."
+      },
+      body: issueSessionBlueprintInputValidator
+    },
+    async function (request, reply) {
+      if (!requireLocalCurrentAppRequest(request, reply)) {
+        return;
+      }
+      const response = await getCurrentAppService(app).saveIssueSessionBlueprint(
+        request.params.sessionId,
+        requestBodyObject(request)
+      );
+      reply.code(sessionStatusCode(response, { missingStatus: 404 })).send(response);
     }
   );
 
