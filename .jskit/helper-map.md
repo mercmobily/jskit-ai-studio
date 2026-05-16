@@ -276,18 +276,6 @@ Root package: jskit-ai-studio
 - src/components/studio/DoctorStatusPage.vue
     - default (default, default)
 
-- src/components/studio/issue-session/IssueSessionConfirmDialog.vue
-    - default (default, default)
-
-- src/components/studio/issue-session/IssueSessionDiffDialog.vue
-    - default (default, default)
-
-- src/components/studio/issue-session/IssueSessionFacts.vue
-    - default (default, default)
-
-- src/components/studio/issue-session/IssueSessionTimeline.vue
-    - default (default, default)
-
 - src/components/studio/IssueSessionPanel.vue
     - default (default, default)
 
@@ -312,34 +300,47 @@ Root package: jskit-ai-studio
 - src/error.js
     - default (default, default)
 
+- src/lib/codexCompletionWatcher.js
+    - codexOutputEndsWithConversationInterrupted (function, export)
+    - createCodexCompletionWatcher (function, helper)
+    - DEFAULT_CODEX_IDLE_MS (value, component_or_class)
+
 - src/lib/codexOutput.js
+    - cleanSingleLineCodexOutput (function, export)
     - codexTrustPromptLooksActive (function, export)
     - extractCodexThreadId (function, helper)
+    - extractMarkedOutput (function, helper)
+    - extractMarkedOutputBlocks (function, helper)
+    - extractMarkedOutputDetails (function, helper)
     - isCodexThreadId (function, helper)
-    - stripStudioContextBlocksForDisplay (function, export)
+    - isPlaceholderMarkedOutput (function, helper)
+    - outputAfterPromptStart (function, export)
     - stripTerminalControlSequences (function, export)
+    - suffixPrefixOverlapLength (function, export)
+
+- src/lib/deslopResult.js
+    - AUTO_RESOLVE_PRIORITIES (value, component_or_class)
+    - buildResolveDeslopFindingsPrompt (function, helper)
+    - deslopFindingsByPriority (function, export)
+    - parseDeslopResult (function, helper)
+    - parseDeslopResultBlock (function, helper)
 
 - src/lib/doctorSummaryState.js
     - resolveDoctorSummaryState (function, helper)
 
-- src/lib/issueSessionPromptIdentity.js
+- src/lib/issueSessionPromptAutomation.js
     - buildIssueSessionCodexPromptSignature (function, helper)
+    - shouldAutoRunCodexPromptHandoff (function, export)
 
 - src/lib/issueSessionStepControls.js
     - buildActiveStepControls (function, helper)
-
-- src/lib/issueSessionTimelineModel.js
-    - groupedIssueSessionSteps (function, export)
-    - issueSessionCurrentStepActionNotice (function, export)
-    - issueSessionDisplayStepId (function, export)
-    - issueSessionStepSourceIds (function, export)
-    - issueSessionTimelineSteps (function, export)
 
 - src/lib/issueSessionViewModel.js
     - canUseIssueSessionTerminal (function, export)
     - isAbandonedIssueSession (function, helper)
     - isClosedIssueSession (function, helper)
     - isOpenIssueSession (function, helper)
+    - issueSessionCodexExpectedOutputs (function, export)
     - issueSessionCodexPromptActionLabel (function, export)
     - issueSessionDisplayTitle (function, export)
     - issueSessionFacts (function, export)
@@ -349,7 +350,6 @@ Root package: jskit-ai-studio
     - parseGithubSessionLink (function, helper)
     - shortIssueSessionId (function, export)
     - shouldAutoInjectIssueSessionCodexPrompt (function, export)
-    - shouldSendIssueSessionCodexPrompt (function, export)
     - shouldUseManualIssueSessionCodexPrompt (function, export)
 
 - src/lib/studioApi.js
@@ -441,10 +441,10 @@ Root package: jskit-ai-studio
 
 ## Direct JSKIT package exports
 
-- @jskit-ai/agent-docs@0.1.41
+- @jskit-ai/agent-docs@0.1.39
     - no exported code files detected
 
-- @jskit-ai/config-eslint@0.1.79
+- @jskit-ai/config-eslint@0.1.77
     - . -> src/index.js
     - ./base -> base.js
       - baseConfig (value, export)
@@ -457,7 +457,7 @@ Root package: jskit-ai-studio
     - ./web -> web.js
       - webConfig (value, export)
 
-- @jskit-ai/http-runtime@0.1.79
+- @jskit-ai/http-runtime@0.1.77
     - ./client -> src/client/index.js
     - ./shared -> src/shared/index.js
     - ./shared/validators/command -> src/shared/validators/command.js
@@ -510,12 +510,12 @@ Root package: jskit-ai-studio
       - createCursorPagedListResponseSchema (function, helper)
       - createResource (function, helper)
 
-- @jskit-ai/jskit-cli@0.2.89
+- @jskit-ai/jskit-cli@0.2.87
     - . -> src/index.js
     - ./client -> src/client/index.js
     - ./server -> src/server/index.js
 
-- @jskit-ai/kernel@0.1.80
+- @jskit-ai/kernel@0.1.78
     - ./_testable -> _testable/index.js
     - ./client -> client/index.d.ts
       - bootstrapClientShellApp (function, export)
@@ -734,7 +734,7 @@ Root package: jskit-ai-studio
     - ./shared/validators/inputNormalization -> shared/validators/inputNormalization.js
       - normalizeObjectInput (function, helper)
 
-- @jskit-ai/shell-web@0.1.79
+- @jskit-ai/shell-web@0.1.77
     - ./client -> src/client/index.js
       - clientProviders (value, export)
     - ./client/bootstrap -> src/client/bootstrap/index.js
