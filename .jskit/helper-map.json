@@ -1063,6 +1063,46 @@
         ]
       },
       {
+        "path": "src/components/studio/issue-session/IssueSessionConfirmDialog.vue",
+        "exports": [
+          {
+            "name": "default",
+            "kind": "default",
+            "role": "default"
+          }
+        ]
+      },
+      {
+        "path": "src/components/studio/issue-session/IssueSessionDiffDialog.vue",
+        "exports": [
+          {
+            "name": "default",
+            "kind": "default",
+            "role": "default"
+          }
+        ]
+      },
+      {
+        "path": "src/components/studio/issue-session/IssueSessionFacts.vue",
+        "exports": [
+          {
+            "name": "default",
+            "kind": "default",
+            "role": "default"
+          }
+        ]
+      },
+      {
+        "path": "src/components/studio/issue-session/IssueSessionTimeline.vue",
+        "exports": [
+          {
+            "name": "default",
+            "kind": "default",
+            "role": "default"
+          }
+        ]
+      },
+      {
         "path": "src/components/studio/IssueSessionPanel.vue",
         "exports": [
           {
@@ -1143,33 +1183,8 @@
         ]
       },
       {
-        "path": "src/lib/codexCompletionWatcher.js",
-        "exports": [
-          {
-            "name": "codexOutputEndsWithConversationInterrupted",
-            "kind": "function",
-            "role": "export"
-          },
-          {
-            "name": "createCodexCompletionWatcher",
-            "kind": "function",
-            "role": "helper"
-          },
-          {
-            "name": "DEFAULT_CODEX_IDLE_MS",
-            "kind": "value",
-            "role": "component_or_class"
-          }
-        ]
-      },
-      {
         "path": "src/lib/codexOutput.js",
         "exports": [
-          {
-            "name": "cleanSingleLineCodexOutput",
-            "kind": "function",
-            "role": "export"
-          },
           {
             "name": "codexTrustPromptLooksActive",
             "kind": "function",
@@ -1181,32 +1196,12 @@
             "role": "helper"
           },
           {
-            "name": "extractMarkedOutput",
-            "kind": "function",
-            "role": "helper"
-          },
-          {
-            "name": "extractMarkedOutputBlocks",
-            "kind": "function",
-            "role": "helper"
-          },
-          {
-            "name": "extractMarkedOutputDetails",
-            "kind": "function",
-            "role": "helper"
-          },
-          {
             "name": "isCodexThreadId",
             "kind": "function",
             "role": "helper"
           },
           {
-            "name": "isPlaceholderMarkedOutput",
-            "kind": "function",
-            "role": "helper"
-          },
-          {
-            "name": "outputAfterPromptStart",
+            "name": "stripStudioContextBlocksForDisplay",
             "kind": "function",
             "role": "export"
           },
@@ -1214,41 +1209,6 @@
             "name": "stripTerminalControlSequences",
             "kind": "function",
             "role": "export"
-          },
-          {
-            "name": "suffixPrefixOverlapLength",
-            "kind": "function",
-            "role": "export"
-          }
-        ]
-      },
-      {
-        "path": "src/lib/deslopResult.js",
-        "exports": [
-          {
-            "name": "AUTO_RESOLVE_PRIORITIES",
-            "kind": "value",
-            "role": "component_or_class"
-          },
-          {
-            "name": "buildResolveDeslopFindingsPrompt",
-            "kind": "function",
-            "role": "helper"
-          },
-          {
-            "name": "deslopFindingsByPriority",
-            "kind": "function",
-            "role": "export"
-          },
-          {
-            "name": "parseDeslopResult",
-            "kind": "function",
-            "role": "helper"
-          },
-          {
-            "name": "parseDeslopResultBlock",
-            "kind": "function",
-            "role": "helper"
           }
         ]
       },
@@ -1263,17 +1223,12 @@
         ]
       },
       {
-        "path": "src/lib/issueSessionPromptAutomation.js",
+        "path": "src/lib/issueSessionPromptIdentity.js",
         "exports": [
           {
             "name": "buildIssueSessionCodexPromptSignature",
             "kind": "function",
             "role": "helper"
-          },
-          {
-            "name": "shouldAutoRunCodexPromptHandoff",
-            "kind": "function",
-            "role": "export"
           }
         ]
       },
@@ -1284,6 +1239,36 @@
             "name": "buildActiveStepControls",
             "kind": "function",
             "role": "helper"
+          }
+        ]
+      },
+      {
+        "path": "src/lib/issueSessionTimelineModel.js",
+        "exports": [
+          {
+            "name": "groupedIssueSessionSteps",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "issueSessionCurrentStepActionNotice",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "issueSessionDisplayStepId",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "issueSessionStepSourceIds",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "issueSessionTimelineSteps",
+            "kind": "function",
+            "role": "export"
           }
         ]
       },
@@ -1309,11 +1294,6 @@
             "name": "isOpenIssueSession",
             "kind": "function",
             "role": "helper"
-          },
-          {
-            "name": "issueSessionCodexExpectedOutputs",
-            "kind": "function",
-            "role": "export"
           },
           {
             "name": "issueSessionCodexPromptActionLabel",
@@ -1357,6 +1337,11 @@
           },
           {
             "name": "shouldAutoInjectIssueSessionCodexPrompt",
+            "kind": "function",
+            "role": "export"
+          },
+          {
+            "name": "shouldSendIssueSessionCodexPrompt",
             "kind": "function",
             "role": "export"
           },
@@ -1752,13 +1737,13 @@
   "jskitPackages": [
     {
       "name": "@jskit-ai/agent-docs",
-      "version": "0.1.39",
+      "version": "0.1.41",
       "installed": true,
       "exports": []
     },
     {
       "name": "@jskit-ai/config-eslint",
-      "version": "0.1.77",
+      "version": "0.1.79",
       "installed": true,
       "exports": [
         {
@@ -1824,7 +1809,7 @@
     },
     {
       "name": "@jskit-ai/http-runtime",
-      "version": "0.1.77",
+      "version": "0.1.79",
       "installed": true,
       "exports": [
         {
@@ -2094,7 +2079,7 @@
     },
     {
       "name": "@jskit-ai/jskit-cli",
-      "version": "0.2.87",
+      "version": "0.2.89",
       "installed": true,
       "exports": [
         {
@@ -2116,7 +2101,7 @@
     },
     {
       "name": "@jskit-ai/kernel",
-      "version": "0.1.78",
+      "version": "0.1.80",
       "installed": true,
       "exports": [
         {
@@ -3234,7 +3219,7 @@
     },
     {
       "name": "@jskit-ai/shell-web",
-      "version": "0.1.77",
+      "version": "0.1.79",
       "installed": true,
       "exports": [
         {
