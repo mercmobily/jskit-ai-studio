@@ -282,6 +282,7 @@ async function checkTargetDirectory(targetRoot) {
 
 async function checkTargetIdentity({
   selfTargetAllowed = false,
+  selfTargetPolicyError = "",
   studioRoot,
   targetRoot,
   studioRepoRoot,
@@ -308,6 +309,16 @@ async function checkTargetIdentity({
   }
 
   if (targetIsStudioRoot) {
+    if (selfTargetPolicyError) {
+      return failCheck({
+        id: "target-identity",
+        label: "Target identity",
+        expected: "The selected adapter can evaluate whether self-targeting is allowed.",
+        observed: `${observed}\nPolicy error: ${selfTargetPolicyError}`,
+        explanation: "Studio is targeting itself, but Adapter Setup could not evaluate the selected adapter's self-target policy."
+      });
+    }
+
     return failCheck({
       id: "target-identity",
       label: "Target identity",
@@ -722,25 +733,40 @@ function startGhLoginTerminal(targetRoot) {
   });
 }
 
-async function adapterAllowsSelfTarget({
+async function readAdapterSelfTargetPolicy({
   projectService = null,
   studioRoot = "",
   targetRoot = ""
 } = {}) {
   if (!projectService || typeof projectService.createRuntime !== "function") {
-    return false;
+    return {
+      allowed: false,
+      error: "Adapter project service is unavailable."
+    };
   }
 
   try {
     const runtime = await projectService.createRuntime();
-    return typeof runtime.adapter?.allowsStudioSelfTarget === "function" &&
-      await runtime.adapter.allowsStudioSelfTarget({
+    if (typeof runtime.adapter?.allowsStudioSelfTarget !== "function") {
+      return {
+        allowed: false,
+        error: "Active adapter does not declare a self-target policy."
+      };
+    }
+
+    return {
+      allowed: await runtime.adapter.allowsStudioSelfTarget({
         config: runtime.projectConfig,
         studioRoot,
         targetRoot
-      }) === true;
-  } catch {
-    return false;
+      }) === true,
+      error: ""
+    };
+  } catch (error) {
+    return {
+      allowed: false,
+      error: String(error?.message || error || "Adapter self-target policy could not be evaluated.")
+    };
   }
 }
 
@@ -756,7 +782,7 @@ async function inspectAdapterSetup({
     hostGitRoot(normalizedStudioRoot),
     hostGitRoot(normalizedTargetRoot)
   ]);
-  const selfTargetAllowed = await adapterAllowsSelfTarget({
+  const selfTargetPolicy = await readAdapterSelfTargetPolicy({
     projectService,
     studioRoot: normalizedStudioRoot,
     targetRoot: normalizedTargetRoot
@@ -772,7 +798,8 @@ async function inspectAdapterSetup({
     run: () => checkTargetIdentity({
       studioRoot: normalizedStudioRoot,
       targetRoot: normalizedTargetRoot,
-      selfTargetAllowed,
+      selfTargetAllowed: selfTargetPolicy.allowed,
+      selfTargetPolicyError: selfTargetPolicy.error,
       studioRepoRoot,
       targetRepoRoot
     })

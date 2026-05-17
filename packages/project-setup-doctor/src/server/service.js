@@ -57,6 +57,9 @@ import {
 } from "../../../../server/lib/shellCommands.js";
 
 const TERMINAL_NAMESPACE = "project-setup-doctor";
+const CREATE_GIT_CHECKPOINT_ACTION = "terminal-git-checkpoint";
+const PUSH_GIT_CHECKPOINT_ACTION = "terminal-git-push-checkpoint";
+const DEFAULT_CHECKPOINT_COMMIT_MESSAGE = "Initial project setup";
 
 function workspaceWriteDockerArgs() {
   return [
@@ -235,7 +238,7 @@ function gitCheckpointScript() {
     "export GIT_TERMINAL_PROMPT=0",
     "set -x",
     "as_host git -c safe.directory=/workspace status --short",
-    "if ! as_host git -c safe.directory=/workspace rev-parse --verify HEAD >/dev/null 2>&1; then if [ -z \"$(as_host git -c safe.directory=/workspace status --porcelain=v1)\" ]; then echo 'No files to checkpoint and no commits exist.'; exit 1; fi; as_host git -c safe.directory=/workspace add .; as_host git -c safe.directory=/workspace commit -m \"$AI_STUDIO_COMMIT_MESSAGE\"; fi",
+    "if ! as_host git -c safe.directory=/workspace rev-parse --verify HEAD >/dev/null 2>&1; then if [ \"${AI_STUDIO_CHECKPOINT_ALLOW_CREATE:-0}\" != \"1\" ]; then echo 'No local commit exists to push.'; exit 1; fi; if [ -z \"$(as_host git -c safe.directory=/workspace status --porcelain=v1)\" ]; then echo 'No files to checkpoint and no commits exist.'; exit 1; fi; as_host git -c safe.directory=/workspace add .; as_host git -c safe.directory=/workspace commit -m \"$AI_STUDIO_COMMIT_MESSAGE\"; fi",
     "branch=\"$(as_host git -c safe.directory=/workspace branch --show-current)\"",
     "if [ -z \"$branch\" ]; then echo 'No current branch.'; exit 1; fi",
     "as_host git -c safe.directory=/workspace -c credential.helper= push -u origin HEAD",
@@ -244,25 +247,39 @@ function gitCheckpointScript() {
   ]);
 }
 
-function gitCheckpointRepair() {
+function gitCheckpointCommandPreview({
+  commitMessage = "<commitMessage>",
+  includeInitialCommit = true
+} = {}) {
+  const commands = ["git status --short"];
+  if (includeInitialCommit) {
+    commands.push(
+      "git add .",
+      `git commit -m "${commitMessage}"`
+    );
+  }
+  commands.push("git push -u origin HEAD");
+  return commands.join("\n");
+}
+
+function gitCheckpointRepair({
+  includeInitialCommit = true
+} = {}) {
   return createRepair({
-    actionId: "terminal-git-checkpoint",
-    command: [
-      "git status --short",
-      "git add . # only when the repo has no commits yet",
-      "git commit -m \"<commitMessage>\" # only when the repo has no commits yet",
-      "git push -u origin HEAD"
-    ].join("\n"),
-    fields: [
+    actionId: includeInitialCommit ? CREATE_GIT_CHECKPOINT_ACTION : PUSH_GIT_CHECKPOINT_ACTION,
+    command: gitCheckpointCommandPreview({
+      includeInitialCommit
+    }),
+    fields: includeInitialCommit ? [
       {
-        defaultValue: "Initial project setup",
+        defaultValue: DEFAULT_CHECKPOINT_COMMIT_MESSAGE,
         id: "commitMessage",
         label: "Commit message",
         required: true,
         type: "text"
       }
-    ],
-    label: "Create and push checkpoint"
+    ] : [],
+    label: includeInitialCommit ? "Create and push checkpoint" : "Push checkpoint"
   });
 }
 
@@ -512,6 +529,13 @@ async function checkRemoteReady(targetRoot, context) {
   });
 }
 
+async function remoteHeadIsAncestorOfLocalHead(targetRoot, remoteSha) {
+  const result = await runGit(targetRoot, ["merge-base", "--is-ancestor", remoteSha, "HEAD"], {
+    timeout: 15_000
+  });
+  return result.ok;
+}
+
 async function checkRemoteSync(targetRoot, context) {
   const localHead = await runGit(targetRoot, ["rev-parse", "--verify", "HEAD"]);
   const hasLocalHead = localHead.ok && Boolean(localHead.stdout);
@@ -562,11 +586,21 @@ async function checkRemoteSync(targetRoot, context) {
     });
   }
 
+  if (remoteSha !== localHead.stdout && await remoteHeadIsAncestorOfLocalHead(targetRoot, remoteSha)) {
+    return passCheck({
+      id: "remote-sync",
+      label: "Remote/local sync",
+      expected: "Local HEAD contains origin default branch HEAD.",
+      observed: `Local HEAD: ${localHead.stdout}\norigin/${remoteBranch}: ${remoteSha}`,
+      explanation: "Local history includes the remote default branch and is ahead. The later Git checkpoint stage will require publishing the local HEAD."
+    });
+  }
+
   if (remoteSha !== localHead.stdout) {
     return hardStopCheck({
       id: "remote-sync",
       label: "Remote/local sync",
-      expected: "Local HEAD equals origin default branch HEAD.",
+      expected: "Local HEAD equals or contains origin default branch HEAD.",
       observed: `Local HEAD: ${localHead.stdout}\norigin/${remoteBranch}: ${remoteSha}`,
       explanation: "Studio hard-stops on divergent histories. Pull, clone, or reconcile manually before continuing."
     });
@@ -657,7 +691,9 @@ async function checkGitCheckpoint(targetRoot, context) {
       expected: `Local HEAD is present on origin/${branch}.`,
       observed: remoteHead.output || `origin/${branch} is missing.`,
       explanation: "The setup checkpoint exists locally but has not been published to the GitHub remote yet.",
-      repair: gitCheckpointRepair()
+      repair: gitCheckpointRepair({
+        includeInitialCommit: false
+      })
     });
   }
 
@@ -668,7 +704,9 @@ async function checkGitCheckpoint(targetRoot, context) {
       expected: `Local HEAD matches origin/${branch}.`,
       observed: `Local HEAD: ${localHead.stdout}\norigin/${branch}: ${remoteSha}`,
       explanation: "Push the setup checkpoint to origin. If Git rejects the push, reconcile the remote branch manually before continuing.",
-      repair: gitCheckpointRepair()
+      repair: gitCheckpointRepair({
+        includeInitialCommit: false
+      })
     });
   }
 
@@ -870,11 +908,18 @@ function startLinkRemoteTerminal(targetRoot, input = {}, env = {}) {
   });
 }
 
-function startGitCheckpointTerminal(targetRoot, input = {}, env = {}) {
-  const validation = validateCommitMessage(input.commitMessage);
-  if (!validation.ok) {
+function startGitCheckpointTerminal(targetRoot, input = {}, env = {}, {
+  allowCreate = true
+} = {}) {
+  const commitMessage = allowCreate
+    ? validateCommitMessage(input.commitMessage)
+    : {
+        commitMessage: DEFAULT_CHECKPOINT_COMMIT_MESSAGE,
+        ok: true
+      };
+  if (!commitMessage.ok) {
     return {
-      error: validation.error,
+      error: commitMessage.error,
       ok: false
     };
   }
@@ -884,13 +929,18 @@ function startGitCheckpointTerminal(targetRoot, input = {}, env = {}) {
       "-e",
       "GH_PROMPT_DISABLED=1",
       "-e",
-      `AI_STUDIO_COMMIT_MESSAGE=${validation.commitMessage}`
+      `AI_STUDIO_CHECKPOINT_ALLOW_CREATE=${allowCreate ? "1" : "0"}`,
+      "-e",
+      `AI_STUDIO_COMMIT_MESSAGE=${commitMessage.commitMessage}`
     ],
     targetRoot
   });
   return startDockerTerminal({
     args,
-    commandPreview: gitCheckpointRepair().commandPreview.replace("<commitMessage>", validation.commitMessage),
+    commandPreview: gitCheckpointCommandPreview({
+      commitMessage: commitMessage.commitMessage,
+      includeInitialCommit: allowCreate
+    }),
     env,
     targetRoot
   });
@@ -980,8 +1030,15 @@ function createService({
       if (actionId === "terminal-link-github-remote") {
         return startLinkRemoteTerminal(resolvedTargetRoot, inputs, setupRuntime.configEnvironment);
       }
-      if (actionId === "terminal-git-checkpoint") {
-        return startGitCheckpointTerminal(resolvedTargetRoot, inputs, setupRuntime.configEnvironment);
+      if (actionId === CREATE_GIT_CHECKPOINT_ACTION) {
+        return startGitCheckpointTerminal(resolvedTargetRoot, inputs, setupRuntime.configEnvironment, {
+          allowCreate: true
+        });
+      }
+      if (actionId === PUSH_GIT_CHECKPOINT_ACTION) {
+        return startGitCheckpointTerminal(resolvedTargetRoot, inputs, setupRuntime.configEnvironment, {
+          allowCreate: false
+        });
       }
 
       const pluginTerminal = await startDoctorPluginTerminal({

@@ -24,7 +24,7 @@
     "jskit:finalization-guard": "bash tooling/adapters/jskit/session-hooks/finalization-guard.sh",
     "preview": "vite preview",
     "lint": "eslint .",
-    "test": "node --test",
+    "test": "node --test tests/server/*.test.js",
     "test:client": "vitest run tests/client",
     "test:e2e": "playwright test tests/e2e",
     "verify": "jskit app verify && npm run --if-present verify:app",

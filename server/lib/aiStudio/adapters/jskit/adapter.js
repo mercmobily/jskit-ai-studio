@@ -27,7 +27,8 @@ import {
 } from "./setupDoctorPlugin.js";
 import {
   ENABLE_RECURSIVE_AI_STUDIO_OPENING_CONFIG,
-  RECURSIVE_AI_STUDIO_COMPANION_ROOT_CONFIG
+  RECURSIVE_AI_STUDIO_COMPANION_ROOT_CONFIG,
+  recursiveAiStudioOpeningEnabled
 } from "./sessionHooks.js";
 
 const JSKIT_MARKERS = deepFreeze([

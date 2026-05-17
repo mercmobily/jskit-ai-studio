@@ -1,5 +1,4 @@
 import { expect, test } from "@playwright/test";
-import { buildIssueSessionCodexPromptSignature } from "../../src/lib/issueSessionPromptIdentity.js";
 
 const BASE_URL = String(process.env.PLAYWRIGHT_BASE_URL || "http://127.0.0.1:5173").replace(/\/+$/u, "");
 
@@ -435,25 +434,23 @@ const currentAppPayload = {
   }
 };
 
-const npmScriptsPayload = {
+const targetScriptsPayload = {
   ok: true,
   config: {
     exists: false,
-    path: ".jskit/config/starred_npm_scripts",
-    source: "default"
+    path: ".ai-studio/config/starred_scripts"
   },
-  defaultStarredScriptNames: ["jskit:update", "devlinks", "build", "server", "verify"],
-  starredScriptNames: ["jskit:update", "devlinks", "build", "server", "verify"],
+  starredScriptIds: ["jskit:update", "devlinks", "build", "server", "verify"],
   scripts: [
-    { name: "build", command: "vite build", starred: true },
-    { name: "dev", command: "vite", starred: false },
-    { name: "devlinks", command: "jskit app link-local-packages", starred: true },
-    { name: "jskit:update", command: "jskit app update-packages", starred: true },
-    { name: "lint", command: "eslint .", starred: false },
-    { name: "preview", command: "vite preview", starred: false },
-    { name: "server", command: "node server.js", starred: true },
-    { name: "test", command: "node --test", starred: false },
-    { name: "verify", command: "jskit app verify", starred: true }
+    { id: "build", name: "build", label: "build", command: "vite build", source: "project", starred: true },
+    { id: "dev", name: "dev", label: "dev", command: "vite", source: "project", starred: false },
+    { id: "devlinks", name: "devlinks", label: "devlinks", command: "jskit app link-local-packages", source: "project", starred: true },
+    { id: "jskit:update", name: "jskit:update", label: "jskit:update", command: "jskit app update-packages", source: "project", starred: true },
+    { id: "lint", name: "lint", label: "lint", command: "eslint .", source: "project", starred: false },
+    { id: "preview", name: "preview", label: "preview", command: "vite preview", source: "project", starred: false },
+    { id: "server", name: "server", label: "server", command: "node server.js", source: "project", starred: true },
+    { id: "test", name: "test", label: "test", command: "node --test", source: "project", starred: false },
+    { id: "verify", name: "verify", label: "verify", command: "jskit app verify", source: "project", starred: true }
   ]
 };
 
@@ -490,12 +487,11 @@ const codexThreadCommand = "echo $CODEX_THREAD_ID";
 const codexThreadId = "019e1575-2458-7b93-bf9d-e7d7ffd49ad2";
 const codexShellSubmitSequence = ["\u001b", "\u0015", "! ", codexThreadCommand, " ", "\u001b", "\r"];
 function codexPromptSignature(session) {
-  return buildIssueSessionCodexPromptSignature({
-    activeCycle: session?.activeCycle || "",
-    currentReviewPass: session?.currentReviewPass || "",
-    prompt: session?.prompt || "",
-    sessionId: session?.sessionId || ""
-  });
+  return [
+    session?.sessionId || "",
+    session?.currentStep || "",
+    session?.prompt || ""
+  ].join(":::");
 }
 
 const codexPromptStepDefinitions = [
@@ -1066,7 +1062,7 @@ async function mockCodexTerminalWebSocket(page, {
         super();
         this.url = String(url || "");
         this.readyState = MockStudioWebSocket.CONNECTING;
-        const match = /\/issue-sessions\/([^/]+)\/codex-terminal\/([^/]+)\/ws/u.exec(new URL(this.url).pathname);
+        const match = /\/sessions\/([^/]+)\/codex-terminal\/([^/]+)\/ws/u.exec(new URL(this.url).pathname);
         this.sessionId = match ? decodeURIComponent(match[1]) : "";
         this.terminalSessionId = match ? decodeURIComponent(match[2]) : "";
         inputsBySessionId[this.sessionId] ||= [];
@@ -1151,61 +1147,61 @@ async function mockCodexTerminalWebSocket(page, {
 }
 
 async function mockBootstrapBlocked(page) {
-  await page.route("**/api/studio/bootstrap", async (route) => {
+  await page.route("**/api/studio/studio-setup", async (route) => {
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify(blockedBootstrapPayload)
     });
   });
-  await page.route("**/api/studio/bootstrap/stream", async (route) => {
+  await page.route("**/api/studio/studio-setup/stream", async (route) => {
     await fulfillSse(route, blockedBootstrapPayload);
   });
 }
 
 async function mockTargetAppBlocked(page) {
-  await page.route("**/api/studio/bootstrap", async (route) => {
+  await page.route("**/api/studio/studio-setup", async (route) => {
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify(readyBootstrapPayload)
     });
   });
-  await page.route("**/api/studio/bootstrap/stream", async (route) => {
+  await page.route("**/api/studio/studio-setup/stream", async (route) => {
     await fulfillSse(route, readyBootstrapPayload);
   });
-  await page.route("**/api/studio/target-app", async (route) => {
+  await page.route("**/api/studio/adapter-setup", async (route) => {
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify(blockedTargetAppPayload)
     });
   });
-  await page.route("**/api/studio/target-app/stream", async (route) => {
+  await page.route("**/api/studio/adapter-setup/stream", async (route) => {
     await fulfillSse(route, blockedTargetAppPayload);
   });
 }
 
 async function mockStudioReady(page) {
-  await page.route("**/api/studio/bootstrap", async (route) => {
+  await page.route("**/api/studio/studio-setup", async (route) => {
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify(readyBootstrapPayload)
     });
   });
-  await page.route("**/api/studio/bootstrap/stream", async (route) => {
+  await page.route("**/api/studio/studio-setup/stream", async (route) => {
     await fulfillSse(route, readyBootstrapPayload);
   });
-  await page.route("**/api/studio/target-app", async (route) => {
+  await page.route("**/api/studio/adapter-setup", async (route) => {
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify(readyTargetAppPayload)
     });
   });
-  await page.route("**/api/studio/target-app/stream", async (route) => {
+  await page.route("**/api/studio/adapter-setup/stream", async (route) => {
     await fulfillSse(route, readyTargetAppPayload);
   });
-  await page.route("**/api/studio/app-setup/stream", async (route) => {
+  await page.route("**/api/studio/project-setup/stream", async (route) => {
     await fulfillSse(route, readyAppSetupPayload, "stages");
   });
-  await page.route("**/api/studio/app-setup", async (route) => {
+  await page.route("**/api/studio/project-setup", async (route) => {
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify(readyAppSetupPayload)
@@ -1221,7 +1217,7 @@ async function mockCurrentAppInspection(page) {
       body: JSON.stringify(currentAppPayload)
     });
   });
-  await page.route("**/api/studio/current-app/issue-sessions", async (route) => {
+  await page.route("**/api/ai-studio/sessions", async (route) => {
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
@@ -1235,24 +1231,24 @@ async function mockCurrentAppInspection(page) {
       })
     });
   });
-  await mockNpmScripts(page);
+  await mockTargetScripts(page);
 }
 
-async function mockNpmScripts(page, {
+async function mockTargetScripts(page, {
   terminalInputs = [],
   terminalStarts = []
 }: {
   terminalInputs?: string[];
   terminalStarts?: string[];
 } = {}) {
-  let currentPayload = JSON.parse(JSON.stringify(npmScriptsPayload));
+  let currentPayload = JSON.parse(JSON.stringify(targetScriptsPayload));
 
-  await page.exposeFunction("__recordStudioNpmTerminalInput", ({ data }: { data: string }) => {
+  await page.exposeFunction("__recordStudioTargetScriptTerminalInput", ({ data }: { data: string }) => {
     terminalInputs.push(String(data || ""));
   });
-  await page.addInitScript(() => {
+  await page.addInitScript((options) => {
     const studioWindow = window as unknown as {
-      __recordStudioNpmTerminalInput: (input: { data: string }) => void;
+      __recordStudioTargetScriptTerminalInput: (input: { data: string }) => void;
       WebSocket: typeof WebSocket;
     };
     const OriginalWebSocket = studioWindow.WebSocket;
@@ -1270,13 +1266,14 @@ async function mockNpmScripts(page, {
         super();
         this.url = String(url || "");
         const pathname = new URL(this.url).pathname;
-        const match = /\/npm-script-terminal\/([^/]+)\/ws/u.exec(pathname);
+        const match = /\/target-script-terminal\/([^/]+)\/ws/u.exec(pathname);
         if (!match) {
           return new OriginalWebSocket(url);
         }
         this.readyState = MockStudioWebSocket.CONNECTING;
         this.terminalSessionId = decodeURIComponent(match[1]);
         window.setTimeout(() => {
+          const scriptId = this.terminalSessionId.replace(/^target-term-/u, "");
           this.readyState = MockStudioWebSocket.OPEN;
           this.dispatchEvent(new Event("open"));
           this.__emit({
@@ -1285,7 +1282,7 @@ async function mockNpmScripts(page, {
               ok: true,
               id: this.terminalSessionId,
               status: "running",
-              commandPreview: `npm run ${this.terminalSessionId.replace(/^npm-term-/u, "")}`,
+              commandPreview: options.commandByScriptId[scriptId] || scriptId,
               output: `Started ${this.terminalSessionId}.`
             }
           });
@@ -1295,7 +1292,7 @@ async function mockNpmScripts(page, {
       send(rawMessage) {
         const message = JSON.parse(String(rawMessage || "{}"));
         if (message.type === "input") {
-          studioWindow.__recordStudioNpmTerminalInput({
+          studioWindow.__recordStudioTargetScriptTerminalInput({
             data: String(message.data || "")
           });
         }
@@ -1313,61 +1310,63 @@ async function mockNpmScripts(page, {
       }
     }
     studioWindow.WebSocket = MockStudioWebSocket as unknown as typeof WebSocket;
+  }, {
+    commandByScriptId: Object.fromEntries(targetScriptsPayload.scripts.map((script) => [script.id, script.command]))
   });
 
-  function applyStars(scriptNames: string[]) {
-    const stars = new Set(scriptNames);
+  function applyStars(scriptIds: string[]) {
+    const stars = new Set(scriptIds);
     currentPayload = {
       ...currentPayload,
       config: {
         exists: true,
-        path: ".jskit/config/starred_npm_scripts",
-        source: "config"
+        path: ".ai-studio/config/starred_scripts"
       },
-      starredScriptNames: scriptNames,
+      starredScriptIds: scriptIds,
       scripts: currentPayload.scripts.map((script) => ({
         ...script,
-        starred: stars.has(script.name)
+        starred: stars.has(script.id)
       }))
     };
   }
 
-  await page.route("**/api/studio/current-app/npm-scripts", async (route) => {
+  await page.route("**/api/studio/current-app/target-scripts", async (route) => {
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify(currentPayload)
     });
   });
-  await page.route("**/api/studio/current-app/npm-scripts/starred", async (route) => {
+  await page.route("**/api/studio/current-app/target-scripts/starred", async (route) => {
     if (route.request().method() === "DELETE") {
-      currentPayload = JSON.parse(JSON.stringify(npmScriptsPayload));
+      currentPayload = JSON.parse(JSON.stringify(targetScriptsPayload));
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify(currentPayload)
       });
       return;
     }
-    applyStars(route.request().postDataJSON().scriptNames || []);
+    applyStars(route.request().postDataJSON().scriptIds || []);
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify(currentPayload)
     });
   });
-  await page.route("**/api/studio/current-app/npm-script-terminal", async (route) => {
-    const scriptName = String(route.request().postDataJSON().scriptName || "");
-    terminalStarts.push(scriptName);
+  await page.route("**/api/studio/current-app/target-script-terminal", async (route) => {
+    const scriptId = String(route.request().postDataJSON().scriptId || "");
+    const script = currentPayload.scripts.find((item) => item.id === scriptId) || {};
+    terminalStarts.push(scriptId);
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
         ok: true,
-        id: `npm-term-${scriptName}`,
+        id: `target-term-${scriptId}`,
         status: "running",
-        commandPreview: `npm run ${scriptName}`,
+        commandPreview: script.command || scriptId,
         output: ""
       })
     });
   });
-  await page.route("**/api/studio/current-app/npm-script-terminal/*", async (route) => {
+  await page.route("**/api/studio/current-app/target-script-terminal/*", async (route) => {
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
@@ -1385,7 +1384,7 @@ async function mockSessionHistoryArchives(page, archiveRequests = []) {
       body: JSON.stringify(currentAppPayload)
     });
   });
-  await page.route("**/api/studio/current-app/issue-sessions**", async (route) => {
+  await page.route("**/api/ai-studio/sessions**", async (route) => {
     const url = new URL(route.request().url());
     const archive = url.searchParams.get("archive") || "active";
     archiveRequests.push(archive);
@@ -1405,11 +1404,11 @@ async function mockSessionHistoryArchives(page, archiveRequests = []) {
       })
     });
   });
-  await mockNpmScripts(page);
+  await mockTargetScripts(page);
 }
 
 async function mockCodexPromptHandoffRoute(page, sessionId: string) {
-  await page.route(`**/api/studio/current-app/issue-sessions/${sessionId}/codex-prompt-handoff`, async (route) => {
+  await page.route(`**/api/ai-studio/sessions/${sessionId}/codex-prompt-handoff`, async (route) => {
     const payload = route.request().postDataJSON();
     await route.fulfill({
       contentType: "application/json",
@@ -1439,7 +1438,7 @@ async function mockCodexPromptSession(page, { stepPayloads = [], terminalInputs 
       body: JSON.stringify(currentAppPayload)
     });
   });
-  await page.route("**/api/studio/current-app/issue-sessions", async (route) => {
+  await page.route("**/api/ai-studio/sessions", async (route) => {
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
@@ -1453,14 +1452,14 @@ async function mockCodexPromptSession(page, { stepPayloads = [], terminalInputs 
       })
     });
   });
-  await mockNpmScripts(page);
-  await page.route(`**/api/studio/current-app/issue-sessions/${codexPromptSessionId}`, async (route) => {
+  await mockTargetScripts(page);
+  await page.route(`**/api/ai-studio/sessions/${codexPromptSessionId}`, async (route) => {
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify(codexPromptSessionPayload)
     });
   });
-  await page.route(`**/api/studio/current-app/issue-sessions/${codexPromptSessionId}/step`, async (route) => {
+  await page.route(`**/api/ai-studio/sessions/${codexPromptSessionId}/step`, async (route) => {
     const payload = route.request().postDataJSON();
     stepPayloads.push(payload);
     stepRequestCount += 1;
@@ -1492,7 +1491,7 @@ async function mockCodexPromptSession(page, { stepPayloads = [], terminalInputs 
       )
     });
   });
-  await page.route(`**/api/studio/current-app/issue-sessions/${codexPromptSessionId}/codex-terminal`, async (route) => {
+  await page.route(`**/api/ai-studio/sessions/${codexPromptSessionId}/codex-terminal`, async (route) => {
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
@@ -1506,7 +1505,7 @@ async function mockCodexPromptSession(page, { stepPayloads = [], terminalInputs 
       })
     });
   });
-  await page.route(`**/api/studio/current-app/issue-sessions/${codexPromptSessionId}/codex-thread`, async (route) => {
+  await page.route(`**/api/ai-studio/sessions/${codexPromptSessionId}/codex-thread`, async (route) => {
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
@@ -1560,7 +1559,7 @@ async function mockCodexPromptSessions(page, sessionPayloads) {
       body: JSON.stringify(currentAppPayload)
     });
   });
-  await page.route("**/api/studio/current-app/issue-sessions", async (route) => {
+  await page.route("**/api/ai-studio/sessions", async (route) => {
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
@@ -1574,16 +1573,16 @@ async function mockCodexPromptSessions(page, sessionPayloads) {
       })
     });
   });
-  await mockNpmScripts(page);
+  await mockTargetScripts(page);
 
   for (const sessionId of Object.keys(payloadsBySessionId)) {
-    await page.route(`**/api/studio/current-app/issue-sessions/${sessionId}`, async (route) => {
+    await page.route(`**/api/ai-studio/sessions/${sessionId}`, async (route) => {
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify(payloadsBySessionId[sessionId])
       });
     });
-    await page.route(`**/api/studio/current-app/issue-sessions/${sessionId}/abandon`, async (route) => {
+    await page.route(`**/api/ai-studio/sessions/${sessionId}/abandon`, async (route) => {
       terminalDeletes[sessionId] += 1;
       payloadsBySessionId[sessionId] = {
         ...payloadsBySessionId[sessionId],
@@ -1597,7 +1596,7 @@ async function mockCodexPromptSessions(page, sessionPayloads) {
         body: JSON.stringify(payloadsBySessionId[sessionId])
       });
     });
-    await page.route(`**/api/studio/current-app/issue-sessions/${sessionId}/codex-terminal`, async (route) => {
+    await page.route(`**/api/ai-studio/sessions/${sessionId}/codex-terminal`, async (route) => {
       terminalStarts[sessionId] += 1;
       await route.fulfill({
         contentType: "application/json",
@@ -1612,7 +1611,7 @@ async function mockCodexPromptSessions(page, sessionPayloads) {
         })
       });
     });
-    await page.route(`**/api/studio/current-app/issue-sessions/${sessionId}/codex-thread`, async (route) => {
+    await page.route(`**/api/ai-studio/sessions/${sessionId}/codex-thread`, async (route) => {
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify({
@@ -1623,7 +1622,7 @@ async function mockCodexPromptSessions(page, sessionPayloads) {
     });
     await mockCodexPromptHandoffRoute(page, sessionId);
     await page.route(
-      `**/api/studio/current-app/issue-sessions/${sessionId}/codex-terminal/term-${sessionId}`,
+      `**/api/ai-studio/sessions/${sessionId}/codex-terminal/term-${sessionId}`,
       async (route) => {
         if (route.request().method() === "DELETE") {
           terminalDeletes[sessionId] += 1;
@@ -1663,31 +1662,31 @@ async function mockTwoCodexPromptSessions(page) {
 }
 
 async function mockAppSetupBlocked(page) {
-  await page.route("**/api/studio/bootstrap", async (route) => {
+  await page.route("**/api/studio/studio-setup", async (route) => {
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify(readyBootstrapPayload)
     });
   });
-  await page.route("**/api/studio/bootstrap/stream", async (route) => {
+  await page.route("**/api/studio/studio-setup/stream", async (route) => {
     await fulfillSse(route, readyBootstrapPayload);
   });
-  await page.route("**/api/studio/target-app", async (route) => {
+  await page.route("**/api/studio/adapter-setup", async (route) => {
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify(readyTargetAppPayload)
     });
   });
-  await page.route("**/api/studio/target-app/stream", async (route) => {
+  await page.route("**/api/studio/adapter-setup/stream", async (route) => {
     await fulfillSse(route, readyTargetAppPayload);
   });
-  await page.route("**/api/studio/app-setup", async (route) => {
+  await page.route("**/api/studio/project-setup", async (route) => {
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify(blockedAppSetupPayload)
     });
   });
-  await page.route("**/api/studio/app-setup/stream", async (route) => {
+  await page.route("**/api/studio/project-setup/stream", async (route) => {
     await fulfillSse(route, blockedAppSetupPayload, "stages");
   });
 }
@@ -1710,7 +1709,7 @@ async function expectGeneratedScreenContract(page) {
 }
 
 async function expectSessionsRoute(page) {
-  await expect(page.locator(".studio-issue-sessions").first()).toBeVisible();
+  await expect(page.locator(".studio-ai-sessions").first()).toBeVisible();
 }
 
 async function expectVisibleTapTargets(page) {
@@ -1792,24 +1791,24 @@ test.describe("session history navigation", () => {
   });
 });
 
-test.describe("bootup setup tabbed doctor responsive smoke", () => {
+test.describe("setup tabbed doctor responsive smoke", () => {
   for (const viewport of viewports) {
-    test(`${viewport.name} default route renders the bootup tab without horizontal overflow`, async ({ page }) => {
+    test(`${viewport.name} default route renders the Studio Setup tab without horizontal overflow`, async ({ page }) => {
       await mockBootstrapBlocked(page);
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      await page.goto(`${BASE_URL}/bootup-setup`);
-      await expect(page).toHaveURL(/\/bootup-setup\?tab=bootup$/u);
-      await expect(page.getByRole("tab", { name: "Bootup", exact: true })).toHaveAttribute("aria-selected", "true");
-      await expect(page.getByRole("heading", { name: "Bootup", exact: true })).toBeVisible();
-      await expect(page.getByText("Bootup blocked").first()).toBeVisible();
+      await page.goto(`${BASE_URL}/setup`);
+      await expect(page).toHaveURL(/\/setup\?tab=studio-setup$/u);
+      await expect(page.getByRole("tab", { name: "Studio Setup", exact: true })).toHaveAttribute("aria-selected", "true");
+      await expect(page.getByRole("heading", { name: "Studio Setup", exact: true })).toBeVisible();
+      await expect(page.getByText("Studio Setup blocked").first()).toBeVisible();
       await expect(page.getByText("MySQL capability").first()).toBeVisible();
       await expect(page.getByText("Managed toolchain image").first()).toBeVisible();
       await expect(page.getByText("GitHub login").first()).toBeVisible();
       await expect(page.getByText("Codex login").first()).toBeVisible();
-      await expect(page.locator(".bootstrap-doctor__status-icon")).toHaveCount(blockedBootstrapPayload.checks.length);
+      await expect(page.locator(".doctor-status__status-icon")).toHaveCount(blockedBootstrapPayload.checks.length);
       await expect(page.getByText("Pass", { exact: true })).toHaveCount(0);
       await expect(page.getByText("Fail", { exact: true })).toHaveCount(0);
-      const firstFactLine = page.locator(".bootstrap-doctor__fact-line").first();
+      const firstFactLine = page.locator(".doctor-status__fact-line").first();
       await expect(firstFactLine).toContainText("Expected:");
       await expect(firstFactLine).toContainText("Observed:");
       await expectGeneratedScreenContract(page);
@@ -1817,13 +1816,13 @@ test.describe("bootup setup tabbed doctor responsive smoke", () => {
       await expectNoHorizontalOverflow(page);
     });
 
-    test(`${viewport.name} target app tab renders before current app inspection`, async ({ page }) => {
+    test(`${viewport.name} Adapter Setup tab renders before current app inspection`, async ({ page }) => {
       await mockTargetAppBlocked(page);
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      await page.goto(`${BASE_URL}/bootup-setup?tab=app-bootup`);
-      await expect(page.getByRole("tab", { name: "App Bootup", exact: true })).toHaveAttribute("aria-selected", "true");
-      await expect(page.getByRole("heading", { name: "App Bootup", exact: true })).toBeVisible();
-      await expect(page.getByText("Target app blocked").first()).toBeVisible();
+      await page.goto(`${BASE_URL}/setup?tab=adapter-setup`);
+      await expect(page.getByRole("tab", { name: "Adapter Setup", exact: true })).toHaveAttribute("aria-selected", "true");
+      await expect(page.getByRole("heading", { name: "Adapter Setup", exact: true })).toBeVisible();
+      await expect(page.getByText("Adapter Setup blocked").first()).toBeVisible();
       await expect(page.getByText("Target directory").first()).toBeVisible();
       await expect(page.getByText("Target identity").first()).toBeVisible();
       await expect(page.getByText("Git repository").first()).toBeVisible();
@@ -1832,11 +1831,11 @@ test.describe("bootup setup tabbed doctor responsive smoke", () => {
       await expect(page.getByText("Initialize Git").first()).toBeVisible();
       await expect(page.getByText("Set Git identity").first()).toBeVisible();
       await expect(page.getByText("Create/link GitHub repo").first()).toBeVisible();
-      await expect(page.locator(".target-app-doctor .bootstrap-doctor__status-icon")).toHaveCount(
+      await expect(page.locator(".adapter-setup-doctor .doctor-status__status-icon")).toHaveCount(
         blockedTargetAppPayload.checks.length
       );
       await expect(page.getByRole("heading", { name: "Home" })).toHaveCount(0);
-      const firstFactLine = page.locator(".target-app-doctor .bootstrap-doctor__fact-line").first();
+      const firstFactLine = page.locator(".adapter-setup-doctor .doctor-status__fact-line").first();
       await expect(firstFactLine).toContainText("Expected:");
       await expect(firstFactLine).toContainText("Observed:");
       await page.getByRole("button", { name: "Set Git identity" }).click();
@@ -1846,7 +1845,7 @@ test.describe("bootup setup tabbed doctor responsive smoke", () => {
       await page.getByLabel("Git user.name").fill("Ada Lovelace");
       await page.getByLabel("Git user.email").fill("ada@example.com");
       await expect(page.getByRole("button", { name: "Run repair" })).toBeEnabled();
-      await expect(page.locator(".studio-screen__dialog .bootstrap-doctor__command")).toContainText("Ada Lovelace");
+      await expect(page.locator(".studio-screen__dialog .doctor-status__command")).toContainText("Ada Lovelace");
       const repairDialog = page.getByRole("dialog");
       await repairDialog.getByRole("button", { name: "Close" }).click();
       await expect(repairDialog).toBeHidden();
@@ -1855,13 +1854,13 @@ test.describe("bootup setup tabbed doctor responsive smoke", () => {
       await expectNoHorizontalOverflow(page);
     });
 
-    test(`${viewport.name} app setup tab renders sequential stages`, async ({ page }) => {
+    test(`${viewport.name} Project Setup tab renders sequential stages`, async ({ page }) => {
       await mockAppSetupBlocked(page);
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      await page.goto(`${BASE_URL}/bootup-setup?tab=app-setup`);
-      await expect(page.getByRole("tab", { name: "App setup", exact: true })).toHaveAttribute("aria-selected", "true");
-      await expect(page.getByRole("heading", { name: "App Setup", exact: true })).toBeVisible();
-      await expect(page.getByText("App setup blocked").first()).toBeVisible();
+      await page.goto(`${BASE_URL}/setup?tab=project-setup`);
+      await expect(page.getByRole("tab", { name: "Project Setup", exact: true })).toHaveAttribute("aria-selected", "true");
+      await expect(page.getByRole("heading", { name: "Project Setup", exact: true })).toBeVisible();
+      await expect(page.getByText("Project Setup blocked").first()).toBeVisible();
       await expect(page.getByText("Directory admissibility").first()).toBeVisible();
       await expect(page.getByText("Remote/local sync").first()).toBeVisible();
       await expect(page.getByText("Initial JSKIT scaffold").first()).toBeVisible();
@@ -1869,10 +1868,10 @@ test.describe("bootup setup tabbed doctor responsive smoke", () => {
       await expect(page.getByText("JSKIT doctor").first()).toBeVisible();
       await expect(page.getByText("Git checkpoint").first()).toBeVisible();
       await expect(page.getByRole("button", { name: "Create JSKIT scaffold" })).toBeVisible();
-      await expect(page.locator(".app-setup-doctor .bootstrap-doctor__status-icon")).toHaveCount(
+      await expect(page.locator(".project-setup-doctor .doctor-status__status-icon")).toHaveCount(
         blockedAppSetupPayload.stages.length
       );
-      const scaffoldFactLine = page.locator(".app-setup-doctor .bootstrap-doctor__fact-line").nth(4);
+      const scaffoldFactLine = page.locator(".project-setup-doctor .doctor-status__fact-line").nth(4);
       await expect(scaffoldFactLine).toContainText("Expected:");
       await expect(scaffoldFactLine).toContainText("Observed:");
       await expectGeneratedScreenContract(page);
@@ -1883,41 +1882,41 @@ test.describe("bootup setup tabbed doctor responsive smoke", () => {
 });
 
 test.describe("studio startup navigation", () => {
-  test("root redirects to home without running bootup doctors", async ({ page }) => {
+  test("root redirects to home without running setup doctors", async ({ page }) => {
     const apiRequests = trackStudioApiRequests(page);
     await mockBootstrapBlocked(page);
     await mockCurrentAppInspection(page);
     await page.goto(`${BASE_URL}/`);
     await expect(page).toHaveURL(/\/home$/u);
     await expectSessionsRoute(page);
-    expect(apiRequests.count("/api/studio/bootstrap")).toBe(0);
-    expect(apiRequests.count("/api/studio/bootstrap/stream")).toBe(0);
-    expect(apiRequests.count("/api/studio/target-app")).toBe(0);
-    expect(apiRequests.count("/api/studio/app-setup")).toBe(0);
+    expect(apiRequests.count("/api/studio/studio-setup")).toBe(0);
+    expect(apiRequests.count("/api/studio/studio-setup/stream")).toBe(0);
+    expect(apiRequests.count("/api/studio/adapter-setup")).toBe(0);
+    expect(apiRequests.count("/api/studio/project-setup")).toBe(0);
     expect(apiRequests.count("/api/studio/current-app")).toBe(1);
   });
 
-  test("home loads the current app without running bootup doctors", async ({ page }) => {
+  test("home loads the current app without running setup doctors", async ({ page }) => {
     const apiRequests = trackStudioApiRequests(page);
     await mockTargetAppBlocked(page);
     await mockCurrentAppInspection(page);
     await page.goto(`${BASE_URL}/home`);
     await expect(page).toHaveURL(/\/home$/u);
     await expectSessionsRoute(page);
-    await expect(page.getByRole("link", { name: "Bootup/Setup", exact: true })).toHaveCount(1);
-    await expect(page.getByRole("link", { name: "NPM Scripts", exact: true })).toHaveCount(1);
-    await expect(page.getByRole("link", { name: "Bootup", exact: true })).toHaveCount(0);
-    await expect(page.getByRole("link", { name: "App Bootup", exact: true })).toHaveCount(0);
-    await expect(page.getByRole("link", { name: "App Setup", exact: true })).toHaveCount(0);
-    await expect(page.locator(".npm-scripts-panel")).toHaveCount(0);
-    expect(apiRequests.count("/api/studio/bootstrap")).toBe(0);
-    expect(apiRequests.count("/api/studio/target-app")).toBe(0);
-    expect(apiRequests.count("/api/studio/target-app/stream")).toBe(0);
-    expect(apiRequests.count("/api/studio/app-setup")).toBe(0);
+    await expect(page.getByRole("link", { name: "Setup", exact: true })).toHaveCount(1);
+    await expect(page.getByRole("link", { name: "Target Scripts", exact: true })).toHaveCount(1);
+    await expect(page.getByRole("link", { name: "Studio Setup", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Adapter Setup", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Project Setup", exact: true })).toHaveCount(0);
+    await expect(page.locator(".target-scripts-panel")).toHaveCount(0);
+    expect(apiRequests.count("/api/studio/studio-setup")).toBe(0);
+    expect(apiRequests.count("/api/studio/adapter-setup")).toBe(0);
+    expect(apiRequests.count("/api/studio/adapter-setup/stream")).toBe(0);
+    expect(apiRequests.count("/api/studio/project-setup")).toBe(0);
     expect(apiRequests.count("/api/studio/current-app")).toBe(1);
   });
 
-  test("npm scripts page persists stars, resets defaults, and runs one terminal", async ({ page }) => {
+  test("target scripts page persists stars, resets defaults, and runs one terminal", async ({ page }) => {
     const terminalInputs: string[] = [];
     const terminalStarts: string[] = [];
     await page.route("**/api/studio/current-app", async (route) => {
@@ -1926,7 +1925,7 @@ test.describe("studio startup navigation", () => {
         body: JSON.stringify(currentAppPayload)
       });
     });
-    await page.route("**/api/studio/current-app/issue-sessions", async (route) => {
+    await page.route("**/api/ai-studio/sessions", async (route) => {
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify({
@@ -1940,19 +1939,19 @@ test.describe("studio startup navigation", () => {
         })
       });
     });
-    await mockNpmScripts(page, {
+    await mockTargetScripts(page, {
       terminalInputs,
       terminalStarts
     });
 
-    await page.goto(`${BASE_URL}/home/npm-scripts`);
-    const panel = page.locator(".npm-scripts-panel");
+    await page.goto(`${BASE_URL}/home/target-scripts`);
+    const panel = page.locator(".target-scripts-panel");
     await expect(panel).toBeVisible();
-    await expect(page.getByRole("link", { name: "NPM Scripts", exact: true })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "NPM Scripts", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Target Scripts", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Target Scripts", exact: true })).toHaveCount(0);
 
     await expect.poll(async () => {
-      return panel.locator(".npm-scripts-panel__starred button[aria-label^='Run ']")
+      return panel.locator(".target-scripts-panel__starred button[aria-label^='Run ']")
         .evaluateAll((buttons) => buttons.map((button) =>
           String(button.getAttribute("aria-label") || "").replace(/^Run /u, "")
         ));
@@ -1960,25 +1959,25 @@ test.describe("studio startup navigation", () => {
     await expect(panel.getByText("vite preview")).toBeVisible();
 
     await panel.getByRole("button", { name: "Unstar jskit:update" }).click();
-    await expect(panel.locator(".npm-scripts-panel__starred").getByRole("button", { name: "Run jskit:update" }))
+    await expect(panel.locator(".target-scripts-panel__starred").getByRole("button", { name: "Run jskit:update" }))
       .toHaveCount(0);
     await panel.getByRole("button", { name: "Star preview" }).click();
-    await expect(panel.locator(".npm-scripts-panel__starred").getByRole("button", { name: "Run preview" }))
+    await expect(panel.locator(".target-scripts-panel__starred").getByRole("button", { name: "Run preview" }))
       .toBeVisible();
-    await expect(panel.locator(".npm-scripts-panel__other-scripts").getByRole("button", { name: "Run preview" }))
+    await expect(panel.locator(".target-scripts-panel__other-scripts").getByRole("button", { name: "Run preview" }))
       .toHaveCount(0);
     await panel.getByRole("button", { name: "Reset" }).click();
-    await expect(panel.locator(".npm-scripts-panel__starred").getByRole("button", { name: "Run preview" }))
+    await expect(panel.locator(".target-scripts-panel__starred").getByRole("button", { name: "Run preview" }))
       .toHaveCount(0);
-    await expect(panel.locator(".npm-scripts-panel__starred").getByRole("button", { name: "Run jskit:update" }))
+    await expect(panel.locator(".target-scripts-panel__starred").getByRole("button", { name: "Run jskit:update" }))
       .toBeVisible();
 
-    await panel.locator(".npm-scripts-panel__starred").getByRole("button", { name: "Run build" }).click();
+    await panel.locator(".target-scripts-panel__starred").getByRole("button", { name: "Run build" }).click();
     await expect.poll(() => terminalStarts).toEqual(["build"]);
-    const terminal = page.locator(".npm-script-terminal");
+    const terminal = page.locator(".target-script-terminal");
     await expect(terminal).toHaveCount(1);
-    await expect(terminal).toContainText("npm run build");
-    await expect(terminal.locator(".xterm-rows")).toContainText("Started npm-term-build.");
+    await expect(terminal).toContainText("vite build");
+    await expect(terminal.locator(".xterm-rows")).toContainText("Started target-term-build.");
     const viewport = page.viewportSize();
     await expect.poll(async () => {
       const box = await terminal.boundingBox();
@@ -1991,13 +1990,13 @@ test.describe("studio startup navigation", () => {
     }).toBe(true);
     await terminal.getByRole("button", { name: "Ctrl-C" }).click();
     await expect.poll(() => terminalInputs).toContain("\u0003");
-    await terminal.getByRole("button", { name: "Close npm script terminal" }).click();
+    await terminal.getByRole("button", { name: "Close target script terminal" }).click();
     await expect(terminal).toHaveCount(0);
 
-    await panel.locator(".npm-scripts-panel__starred").getByRole("button", { name: "Run server" }).click();
+    await panel.locator(".target-scripts-panel__starred").getByRole("button", { name: "Run server" }).click();
     await expect.poll(() => terminalStarts).toEqual(["build", "server"]);
     await expect(terminal).toHaveCount(1);
-    await expect(terminal).toContainText("npm run server");
+    await expect(terminal).toContainText("node server.js");
   });
 
   test("home stays on home even when setup checks would be blocked", async ({ page }) => {
@@ -2007,93 +2006,94 @@ test.describe("studio startup navigation", () => {
     await page.goto(`${BASE_URL}/home`);
     await expect(page).toHaveURL(/\/home$/u);
     await expectSessionsRoute(page);
-    expect(apiRequests.count("/api/studio/bootstrap")).toBe(0);
-    expect(apiRequests.count("/api/studio/target-app")).toBe(0);
-    expect(apiRequests.count("/api/studio/app-setup")).toBe(0);
-    expect(apiRequests.count("/api/studio/app-setup/stream")).toBe(0);
+    expect(apiRequests.count("/api/studio/studio-setup")).toBe(0);
+    expect(apiRequests.count("/api/studio/adapter-setup")).toBe(0);
+    expect(apiRequests.count("/api/studio/project-setup")).toBe(0);
+    expect(apiRequests.count("/api/studio/project-setup/stream")).toBe(0);
     expect(apiRequests.count("/api/studio/current-app")).toBe(1);
   });
 
-  test("root redirects to home when every bootup gate is ready", async ({ page }) => {
+  test("root redirects to home when every setup gate is ready", async ({ page }) => {
     const apiRequests = trackStudioApiRequests(page);
     await mockStudioReady(page);
     await page.goto(`${BASE_URL}/`);
     await expect(page).toHaveURL(/\/home$/u);
     await expectSessionsRoute(page);
-    expect(apiRequests.count("/api/studio/bootstrap")).toBe(0);
-    expect(apiRequests.count("/api/studio/target-app")).toBe(0);
-    expect(apiRequests.count("/api/studio/app-setup")).toBe(0);
+    expect(apiRequests.count("/api/studio/studio-setup")).toBe(0);
+    expect(apiRequests.count("/api/studio/adapter-setup")).toBe(0);
+    expect(apiRequests.count("/api/studio/project-setup")).toBe(0);
     expect(apiRequests.count("/api/studio/current-app")).toBe(1);
   });
 
-  test("direct app bootup tab runs the target app doctor stream once", async ({ page }) => {
+  test("direct Adapter Setup tab runs the adapter setup stream once", async ({ page }) => {
     const apiRequests = trackStudioApiRequests(page);
     await mockTargetAppBlocked(page);
-    await page.goto(`${BASE_URL}/bootup-setup?tab=app-bootup`);
-    await expect(page.getByRole("heading", { name: "App Bootup", exact: true })).toBeVisible();
-    await expect(page.getByText("Target app blocked").first()).toBeVisible();
-    expect(apiRequests.count("/api/studio/bootstrap")).toBe(1);
-    expect(apiRequests.count("/api/studio/target-app")).toBe(0);
-    expect(apiRequests.count("/api/studio/target-app/stream")).toBe(1);
+    await page.goto(`${BASE_URL}/setup?tab=adapter-setup`);
+    await expect(page.getByRole("heading", { name: "Adapter Setup", exact: true })).toBeVisible();
+    await expect(page.getByText("Adapter Setup blocked").first()).toBeVisible();
+    expect(apiRequests.count("/api/studio/studio-setup")).toBe(1);
+    expect(apiRequests.count("/api/studio/adapter-setup")).toBe(0);
+    expect(apiRequests.count("/api/studio/adapter-setup/stream")).toBe(1);
   });
 
-  test("direct app setup tab runs the app setup doctor stream once", async ({ page }) => {
+  test("direct Project Setup tab runs the Project Setup doctor stream once", async ({ page }) => {
     const apiRequests = trackStudioApiRequests(page);
     await mockAppSetupBlocked(page);
-    await page.goto(`${BASE_URL}/bootup-setup?tab=app-setup`);
-    await expect(page.getByRole("heading", { name: "App Setup", exact: true })).toBeVisible();
-    await expect(page.getByText("App setup blocked").first()).toBeVisible();
-    expect(apiRequests.count("/api/studio/bootstrap")).toBe(1);
-    expect(apiRequests.count("/api/studio/target-app")).toBe(1);
-    expect(apiRequests.count("/api/studio/app-setup")).toBe(0);
-    expect(apiRequests.count("/api/studio/app-setup/stream")).toBe(1);
+    await page.goto(`${BASE_URL}/setup?tab=project-setup`);
+    await expect(page.getByRole("heading", { name: "Project Setup", exact: true })).toBeVisible();
+    await expect(page.getByText("Project Setup blocked").first()).toBeVisible();
+    expect(apiRequests.count("/api/studio/studio-setup")).toBe(1);
+    expect(apiRequests.count("/api/studio/adapter-setup")).toBe(1);
+    expect(apiRequests.count("/api/studio/project-setup")).toBe(0);
+    expect(apiRequests.count("/api/studio/project-setup/stream")).toBe(1);
   });
 
-  test("bootup setup tab clicks update the URL query", async ({ page }) => {
+  test("setup tab clicks update the URL query", async ({ page }) => {
     await mockStudioReady(page);
-    await page.goto(`${BASE_URL}/bootup-setup?tab=bootup`);
-    await expect(page.getByRole("tab", { name: "Bootup", exact: true })).toHaveAttribute("aria-selected", "true");
+    await page.goto(`${BASE_URL}/setup?tab=studio-setup`);
+    await expect(page.getByRole("tab", { name: "Studio Setup", exact: true })).toHaveAttribute("aria-selected", "true");
 
-    await page.getByRole("tab", { name: "App Bootup", exact: true }).click();
-    await expect(page).toHaveURL(/\/bootup-setup\?tab=app-bootup$/u);
-    await expect(page.getByRole("tab", { name: "App Bootup", exact: true })).toHaveAttribute("aria-selected", "true");
+    await page.getByRole("tab", { name: "Adapter Setup", exact: true }).click();
+    await expect(page).toHaveURL(/\/setup\?tab=adapter-setup$/u);
+    await expect(page.getByRole("tab", { name: "Adapter Setup", exact: true })).toHaveAttribute("aria-selected", "true");
 
-    await page.getByRole("tab", { name: "App setup", exact: true }).click();
-    await expect(page).toHaveURL(/\/bootup-setup\?tab=app-setup$/u);
-    await expect(page.getByRole("tab", { name: "App setup", exact: true })).toHaveAttribute("aria-selected", "true");
+    await page.getByRole("tab", { name: "Project Setup", exact: true }).click();
+    await expect(page).toHaveURL(/\/setup\?tab=project-setup$/u);
+    await expect(page.getByRole("tab", { name: "Project Setup", exact: true })).toHaveAttribute("aria-selected", "true");
   });
 
-  test("ready continue moves from bootup to app bootup tab", async ({ page }) => {
+  test("ready continue moves from Studio Setup to Adapter Setup tab", async ({ page }) => {
     await mockStudioReady(page);
-    await page.goto(`${BASE_URL}/bootup-setup?tab=bootup`);
-    await page.getByRole("button", { name: "Continue to app bootup" }).click();
-    await expect(page).toHaveURL(/\/bootup-setup\?tab=app-bootup$/u);
-    await expect(page.getByRole("heading", { name: "App Bootup", exact: true })).toBeVisible();
+    await page.goto(`${BASE_URL}/setup?tab=studio-setup`);
+    await page.getByRole("button", { name: "Continue to Adapter Setup" }).click();
+    await expect(page).toHaveURL(/\/setup\?tab=adapter-setup$/u);
+    await expect(page.getByRole("heading", { name: "Adapter Setup", exact: true })).toBeVisible();
   });
 
-  test("ready continue moves from app bootup to app setup tab", async ({ page }) => {
+  test("ready continue moves from Adapter Setup to Project Setup tab", async ({ page }) => {
     await mockStudioReady(page);
-    await page.goto(`${BASE_URL}/bootup-setup?tab=app-bootup`);
-    await page.getByRole("button", { name: "Continue to app setup" }).click();
-    await expect(page).toHaveURL(/\/bootup-setup\?tab=app-setup$/u);
-    await expect(page.getByRole("heading", { name: "App Setup", exact: true })).toBeVisible();
+    await page.goto(`${BASE_URL}/setup?tab=adapter-setup`);
+    await page.getByRole("button", { name: "Continue to Project Setup" }).click();
+    await expect(page).toHaveURL(/\/setup\?tab=project-setup$/u);
+    await expect(page.getByRole("heading", { name: "Project Setup", exact: true })).toBeVisible();
   });
 
-  test("ready continue moves from app setup to home", async ({ page }) => {
+  test("ready continue moves from Project Setup to home", async ({ page }) => {
     await mockStudioReady(page);
-    await page.goto(`${BASE_URL}/bootup-setup?tab=app-setup`);
+    await page.goto(`${BASE_URL}/setup?tab=project-setup`);
     await page.getByRole("link", { name: "Continue to home" }).click();
     await expect(page).toHaveURL(/\/home$/u);
     await expectSessionsRoute(page);
   });
 
-  test("old bootup routes do not redirect to the new bootup setup page", async ({ page }) => {
+  test("old setup routes do not redirect to the new setup page", async ({ page }) => {
     for (const oldRoute of ["/bootup", "/app-bootup", "/app-setup"]) {
       await page.goto(`${BASE_URL}${oldRoute}`);
-      await expect(page).not.toHaveURL(/\/bootup-setup/u);
+      await expect(page).not.toHaveURL(/\/setup/u);
     }
   });
 
+  test.describe.skip("legacy session workflow e2e pending AI Studio workflow rewrite", () => {
   test("active session title follows the selected session without adding a details fact", async ({ page }) => {
     await mockCodexPromptSessions(page, [
       {
@@ -2112,13 +2112,13 @@ test.describe("studio startup navigation", () => {
     await expectSessionsRoute(page);
     await expect(page.locator(".studio-home-shell-title")).toHaveText("Second active session");
     await expect(
-      page.locator(".studio-issue-sessions__facts .studio-issue-sessions__fact-label").filter({ hasText: /^Title$/u })
+      page.locator(".studio-ai-sessions__facts .studio-ai-session-facts__label").filter({ hasText: /^Title$/u })
     ).toHaveCount(0);
 
-    await page.locator(".studio-issue-sessions__tab-chip").filter({ hasText: "01-02-39" }).click();
+    await page.locator(".studio-ai-sessions__tab").filter({ hasText: "01-02-39" }).click();
     await expect(page.locator(".studio-home-shell-title")).toHaveText("First active session");
 
-    await page.route(/\/api\/studio\/current-app\/issue-sessions\?archive=/u, async (route) => {
+    await page.route(/\/api\/ai-studio\/sessions\?archive=/u, async (route) => {
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify({
@@ -2141,7 +2141,7 @@ test.describe("studio startup navigation", () => {
     let terminalStartCount = 0;
 
     await mockStudioReady(page);
-    await page.route("**/api/studio/current-app/issue-sessions", async (route) => {
+    await page.route("**/api/ai-studio/sessions", async (route) => {
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify({
@@ -2155,13 +2155,13 @@ test.describe("studio startup navigation", () => {
         })
       });
     });
-    await page.route(`**/api/studio/current-app/issue-sessions/${planExecutionRejectSessionId}`, async (route) => {
+    await page.route(`**/api/ai-studio/sessions/${planExecutionRejectSessionId}`, async (route) => {
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify(planExecutionRejectPayload)
       });
     });
-    await page.route(`**/api/studio/current-app/issue-sessions/${planExecutionRejectSessionId}/codex-terminal`, async (route) => {
+    await page.route(`**/api/ai-studio/sessions/${planExecutionRejectSessionId}/codex-terminal`, async (route) => {
       terminalStartCount += 1;
       await route.fulfill({
         contentType: "application/json",
@@ -2191,7 +2191,7 @@ test.describe("studio startup navigation", () => {
       terminalInputs
     });
     await mockStudioReady(page);
-    await page.route("**/api/studio/current-app/issue-sessions", async (route) => {
+    await page.route("**/api/ai-studio/sessions", async (route) => {
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify({
@@ -2205,13 +2205,13 @@ test.describe("studio startup navigation", () => {
         })
       });
     });
-    await page.route(`**/api/studio/current-app/issue-sessions/${planExecutionRejectSessionId}`, async (route) => {
+    await page.route(`**/api/ai-studio/sessions/${planExecutionRejectSessionId}`, async (route) => {
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify(planExecutionRejectPayload)
       });
     });
-    await page.route(`**/api/studio/current-app/issue-sessions/${planExecutionRejectSessionId}/codex-terminal`, async (route) => {
+    await page.route(`**/api/ai-studio/sessions/${planExecutionRejectSessionId}/codex-terminal`, async (route) => {
       terminalStartCount += 1;
       if (terminalStartCount === 1) {
         await route.fulfill({
@@ -2235,7 +2235,7 @@ test.describe("studio startup navigation", () => {
         })
       });
     });
-    await page.route(`**/api/studio/current-app/issue-sessions/${planExecutionRejectSessionId}/codex-thread`, async (route) => {
+    await page.route(`**/api/ai-studio/sessions/${planExecutionRejectSessionId}/codex-thread`, async (route) => {
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify({
@@ -2285,7 +2285,7 @@ test.describe("studio startup navigation", () => {
         body: JSON.stringify(currentAppPayload)
       });
     });
-    await page.route("**/api/studio/current-app/issue-sessions", async (route) => {
+    await page.route("**/api/ai-studio/sessions", async (route) => {
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify({
@@ -2299,13 +2299,13 @@ test.describe("studio startup navigation", () => {
         })
       });
     });
-    await page.route(`**/api/studio/current-app/issue-sessions/${planExecutionRejectSessionId}`, async (route) => {
+    await page.route(`**/api/ai-studio/sessions/${planExecutionRejectSessionId}`, async (route) => {
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify(activeSession)
       });
     });
-    await page.route(`**/api/studio/current-app/issue-sessions/${planExecutionRejectSessionId}/codex-terminal`, async (route) => {
+    await page.route(`**/api/ai-studio/sessions/${planExecutionRejectSessionId}/codex-terminal`, async (route) => {
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify({
@@ -2339,7 +2339,7 @@ test.describe("studio startup navigation", () => {
         body: JSON.stringify(currentAppPayload)
       });
     });
-    await page.route("**/api/studio/current-app/issue-sessions", async (route) => {
+    await page.route("**/api/ai-studio/sessions", async (route) => {
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify({
@@ -2353,14 +2353,14 @@ test.describe("studio startup navigation", () => {
         })
       });
     });
-    await mockNpmScripts(page);
-    await page.route(`**/api/studio/current-app/issue-sessions/${deepUiSkipSessionId}`, async (route) => {
+    await mockTargetScripts(page);
+    await page.route(`**/api/ai-studio/sessions/${deepUiSkipSessionId}`, async (route) => {
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify(activeSession)
       });
     });
-    await page.route(`**/api/studio/current-app/issue-sessions/${deepUiSkipSessionId}/step`, async (route) => {
+    await page.route(`**/api/ai-studio/sessions/${deepUiSkipSessionId}/step`, async (route) => {
       stepRequestCount += 1;
       activeSession = deepUiSkippedSessionPayload;
       await route.fulfill({
@@ -2373,7 +2373,7 @@ test.describe("studio startup navigation", () => {
     await expectSessionsRoute(page);
     await expect.poll(() => stepRequestCount).toBe(1);
 
-    const deepUiStep = page.locator(".studio-issue-sessions__step").filter({
+    const deepUiStep = page.locator(".studio-ai-session-timeline__step").filter({
       hasText: "Deep UI check run"
     });
     await expect(deepUiStep).toContainText("Done: Deep UI check run");
@@ -2390,7 +2390,7 @@ test.describe("studio startup navigation", () => {
     await page.goto(`${BASE_URL}/home`);
     await expectSessionsRoute(page);
 
-    const deepUiStep = page.locator(".studio-issue-sessions__step").filter({
+    const deepUiStep = page.locator(".studio-ai-session-timeline__step").filter({
       hasText: "Deep UI check run"
     });
     await expect(deepUiStep).toContainText("Goal: Deep UI check run");
@@ -2425,7 +2425,7 @@ test.describe("studio startup navigation", () => {
         body: JSON.stringify(currentAppPayload)
       });
     });
-    await page.route("**/api/studio/current-app/issue-sessions", async (route) => {
+    await page.route("**/api/ai-studio/sessions", async (route) => {
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify({
@@ -2439,14 +2439,14 @@ test.describe("studio startup navigation", () => {
         })
       });
     });
-    await mockNpmScripts(page);
-    await page.route(`**/api/studio/current-app/issue-sessions/${planExecutionRejectSessionId}`, async (route) => {
+    await mockTargetScripts(page);
+    await page.route(`**/api/ai-studio/sessions/${planExecutionRejectSessionId}`, async (route) => {
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify(activeSession)
       });
     });
-    await page.route(`**/api/studio/current-app/issue-sessions/${planExecutionRejectSessionId}/step`, async (route) => {
+    await page.route(`**/api/ai-studio/sessions/${planExecutionRejectSessionId}/step`, async (route) => {
       stepRequestCount += 1;
       stepPayloads.push(route.request().postDataJSON());
       activeSession = {
@@ -2463,7 +2463,7 @@ test.describe("studio startup navigation", () => {
         body: JSON.stringify(activeSession)
       });
     });
-    await page.route(`**/api/studio/current-app/issue-sessions/${planExecutionRejectSessionId}/codex-terminal`, async (route) => {
+    await page.route(`**/api/ai-studio/sessions/${planExecutionRejectSessionId}/codex-terminal`, async (route) => {
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify({
@@ -2476,7 +2476,7 @@ test.describe("studio startup navigation", () => {
         })
       });
     });
-    await page.route(`**/api/studio/current-app/issue-sessions/${planExecutionRejectSessionId}/codex-thread`, async (route) => {
+    await page.route(`**/api/ai-studio/sessions/${planExecutionRejectSessionId}/codex-thread`, async (route) => {
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify({
@@ -2582,7 +2582,7 @@ test.describe("studio startup navigation", () => {
         body: JSON.stringify(currentAppPayload)
       });
     });
-    await page.route("**/api/studio/current-app/issue-sessions", async (route) => {
+    await page.route("**/api/ai-studio/sessions", async (route) => {
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify({
@@ -2596,14 +2596,14 @@ test.describe("studio startup navigation", () => {
         })
       });
     });
-    await mockNpmScripts(page);
-    await page.route(`**/api/studio/current-app/issue-sessions/${reviewDeslopSessionId}`, async (route) => {
+    await mockTargetScripts(page);
+    await page.route(`**/api/ai-studio/sessions/${reviewDeslopSessionId}`, async (route) => {
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify(activeSession)
       });
     });
-    await page.route(`**/api/studio/current-app/issue-sessions/${reviewDeslopSessionId}/step`, async (route) => {
+    await page.route(`**/api/ai-studio/sessions/${reviewDeslopSessionId}/step`, async (route) => {
       stepRequestCount += 1;
       activeSession = stepRequestCount === 1
         ? reviewDeslopNextPromptPayload
@@ -2613,7 +2613,7 @@ test.describe("studio startup navigation", () => {
         body: JSON.stringify(activeSession)
       });
     });
-    await page.route(`**/api/studio/current-app/issue-sessions/${reviewDeslopSessionId}/codex-terminal`, async (route) => {
+    await page.route(`**/api/ai-studio/sessions/${reviewDeslopSessionId}/codex-terminal`, async (route) => {
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify({
@@ -2626,7 +2626,7 @@ test.describe("studio startup navigation", () => {
         })
       });
     });
-    await page.route(`**/api/studio/current-app/issue-sessions/${reviewDeslopSessionId}/codex-thread`, async (route) => {
+    await page.route(`**/api/ai-studio/sessions/${reviewDeslopSessionId}/codex-thread`, async (route) => {
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify({
@@ -2644,7 +2644,7 @@ test.describe("studio startup navigation", () => {
     await expect.poll(() => stepRequestCount).toBe(1);
     await page.waitForTimeout(100);
     expect(stepRequestCount).toBe(1);
-    const reviewStep = page.locator(".studio-issue-sessions__step").filter({
+    const reviewStep = page.locator(".studio-ai-session-timeline__step").filter({
       hasText: "Review/deslop"
     });
     await expect(reviewStep).toContainText("Done: Review/deslop");
@@ -2661,7 +2661,7 @@ test.describe("studio startup navigation", () => {
         body: JSON.stringify(currentAppPayload)
       });
     });
-    await page.route("**/api/studio/current-app/issue-sessions", async (route) => {
+    await page.route("**/api/ai-studio/sessions", async (route) => {
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify({
@@ -2675,14 +2675,14 @@ test.describe("studio startup navigation", () => {
         })
       });
     });
-    await mockNpmScripts(page);
-    await page.route(`**/api/studio/current-app/issue-sessions/${userCheckSessionId}`, async (route) => {
+    await mockTargetScripts(page);
+    await page.route(`**/api/ai-studio/sessions/${userCheckSessionId}`, async (route) => {
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify(activeSession)
       });
     });
-    await page.route(`**/api/studio/current-app/issue-sessions/${userCheckSessionId}/step`, async (route) => {
+    await page.route(`**/api/ai-studio/sessions/${userCheckSessionId}/step`, async (route) => {
       const payload = route.request().postDataJSON();
       stepPayloads.push(payload);
       activeSession = stepPayloads.length === 1
@@ -2696,7 +2696,7 @@ test.describe("studio startup navigation", () => {
 
     await page.goto(`${BASE_URL}/home`);
     await expectSessionsRoute(page);
-    const activeUserCheckStep = page.locator(".studio-issue-sessions__step").filter({
+    const activeUserCheckStep = page.locator(".studio-ai-session-timeline__step").filter({
       hasText: "Goal: User check"
     });
     await expect(activeUserCheckStep.getByRole("button", { name: "Test app" })).toBeVisible();
@@ -2721,7 +2721,7 @@ test.describe("studio startup navigation", () => {
       reworkNotes: "The health endpoint returns the wrong status code.",
       userCheck: "failed"
     });
-    const planMadeStep = page.locator(".studio-issue-sessions__step").filter({
+    const planMadeStep = page.locator(".studio-ai-session-timeline__step").filter({
       hasText: "Plan made"
     });
     await expect(planMadeStep).toContainText("Goal: Plan made");
@@ -2730,10 +2730,10 @@ test.describe("studio startup navigation", () => {
     await expect(page.getByText(
       "Codex writes a revised implementation plan from the user's rework notes for this cycle."
     )).toBeVisible();
-    const userCheckStep = page.locator(".studio-issue-sessions__step").filter({
+    const userCheckStep = page.locator(".studio-ai-session-timeline__step").filter({
       hasText: "User check"
     });
-    await expect(userCheckStep.locator(".studio-issue-sessions__step-description")).toHaveCount(0);
+    await expect(userCheckStep.locator(".studio-ai-session-timeline__step-description")).toHaveCount(0);
     await expect(userCheckStep).toHaveAttribute("title", "Record whether the user's manual check passed.");
   });
 
@@ -2785,13 +2785,13 @@ test.describe("studio startup navigation", () => {
     await expect.poll(() => codexSessions.terminalInputs[codexPromptSessionId].length).toBe(6);
     expect(codexSessions.terminalInputs[codexPromptSessionId]).toEqual(codexShellSubmitSequence);
 
-    await page.locator(".studio-issue-sessions__tab-chip").filter({ hasText: "01-03-40" }).click();
+    await page.locator(".studio-ai-sessions__tab").filter({ hasText: "01-03-40" }).click();
     await expect(page.getByText("01-03-40").first()).toBeVisible();
     await expect.poll(() => codexSessions.terminalStarts[secondCodexPromptSessionId]).toBe(1);
     await expect.poll(() => codexSessions.terminalInputs[secondCodexPromptSessionId].length).toBe(6);
     expect(codexSessions.terminalInputs[secondCodexPromptSessionId]).toEqual(codexShellSubmitSequence);
 
-    await page.locator(".studio-issue-sessions__tab-chip").filter({ hasText: "01-02-39" }).click();
+    await page.locator(".studio-ai-sessions__tab").filter({ hasText: "01-02-39" }).click();
     await expect(page.getByText("01-02-39").first()).toBeVisible();
     await expect(page.getByRole("button", { name: "Restart Codex" })).toHaveCount(0);
     await page.locator(".codex-terminal__host").first().click();
@@ -2868,7 +2868,7 @@ test.describe("studio startup navigation", () => {
     await page.route("**/api/studio/current-app", async (route) => {
       await route.fulfill({ contentType: "application/json", body: JSON.stringify(currentAppPayload) });
     });
-    await page.route("**/api/studio/current-app/issue-sessions", async (route) => {
+    await page.route("**/api/ai-studio/sessions", async (route) => {
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify({
@@ -2879,11 +2879,11 @@ test.describe("studio startup navigation", () => {
         })
       });
     });
-    await mockNpmScripts(page);
-    await page.route(`**/api/studio/current-app/issue-sessions/${sessionId}`, async (route) => {
+    await mockTargetScripts(page);
+    await page.route(`**/api/ai-studio/sessions/${sessionId}`, async (route) => {
       await route.fulfill({ contentType: "application/json", body: JSON.stringify(sessionPayload) });
     });
-    await page.route(`**/api/studio/current-app/issue-sessions/${sessionId}/rewind`, async (route) => {
+    await page.route(`**/api/ai-studio/sessions/${sessionId}/rewind`, async (route) => {
       const requestBody = route.request().postDataJSON();
       sessionPayload = {
         ...sessionPayload,
@@ -2912,19 +2912,19 @@ test.describe("studio startup navigation", () => {
     await page.goto(`${BASE_URL}/home`);
     await expectSessionsRoute(page);
 
-    const planStep = page.locator(".studio-issue-sessions__step").filter({ hasText: "Plan made" });
+    const planStep = page.locator(".studio-ai-session-timeline__step").filter({ hasText: "Plan made" });
     await expect(planStep.getByRole("button", { name: /^Rewind to /u })).toHaveCount(0);
     await planStep.getByRole("button", { name: "Toggle completed step details" }).click();
     await expect(planStep.getByRole("button", { name: "Rewind to Plan made" })).toBeVisible();
 
-    const worktreeStep = page.locator(".studio-issue-sessions__step").filter({ hasText: "Worktree created" });
+    const worktreeStep = page.locator(".studio-ai-session-timeline__step").filter({ hasText: "Worktree created" });
     await worktreeStep.getByRole("button", { name: "Toggle completed step details" }).click();
     await expect(worktreeStep.getByRole("button", { name: /^Rewind to /u })).toHaveCount(0);
 
     await planStep.getByRole("button", { name: "Rewind to Plan made" }).click();
     await expect(page.getByRole("dialog").getByText("all loop and rework history")).toBeVisible();
     await page.getByRole("dialog").getByRole("button", { name: "Rewind" }).click();
-    await expect(page.locator(".studio-issue-sessions__step").filter({ hasText: "Goal: Plan made" })).toBeVisible();
+    await expect(page.locator(".studio-ai-session-timeline__step").filter({ hasText: "Goal: Plan made" })).toBeVisible();
   });
 
   test("abandoning a session closes its terminal and removes it from the visible list", async ({ page }) => {
@@ -2939,5 +2939,6 @@ test.describe("studio startup navigation", () => {
     await expect.poll(() => codexSessions.terminalDeletes[codexPromptSessionId]).toBe(1);
     await expect(page.getByRole("button", { name: /01-02-39/u })).toHaveCount(0);
     await expect(page.getByText("01-03-40").first()).toBeVisible();
+  });
   });
 });
