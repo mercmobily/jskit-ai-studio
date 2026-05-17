@@ -11,17 +11,20 @@ import {
   writeTerminalSession
 } from "../../../../server/lib/terminalSessions.js";
 import {
-  runDoctorStep
-} from "../../../../server/lib/doctorStream.js";
-import {
   createReadyStatusCache
 } from "../../../../server/lib/doctorStatusCache.js";
 import {
-  STUDIO_TOOLCHAIN_IMAGE as TOOLCHAIN_IMAGE
+  areDoctorChecksReady,
+  runDoctorPluginRepair,
+  runDoctorPlugins,
+  startDoctorPluginTerminal
+} from "../../../../server/lib/doctorPlugins.js";
+import {
+  AI_STUDIO_APP_ROOT_ENV,
+  STUDIO_BASE_TOOLCHAIN_IMAGE as TOOLCHAIN_IMAGE
 } from "../../../../server/lib/studioRuntimeIdentity.js";
 import {
   createDoctorRepair,
-  doctorCheckItem as checkItem,
   failDoctorCheck as failCheck,
   passDoctorCheck as passCheck
 } from "../../../../server/lib/doctorCheckItems.js";
@@ -29,18 +32,13 @@ import {
   buildDoctorTerminalArgs,
   buildDoctorToolchainArgs
 } from "../../../../server/lib/doctorToolchain.js";
-import {
-  buildMysqlRepairScript,
-  checkMysqlCapability,
-  mysqlCapabilitySql,
-  mysqlRepair,
-  repairMysql
-} from "./mysqlCapability.js";
 
 const TOOLCHAIN_DOCKERFILE = "tooling/bootstrap/Dockerfile";
 const TOOLCHAIN_CONTEXT = "tooling/bootstrap";
 const REQUIRED_GH_SCOPES = ["repo", "read:org", "gist", "workflow"];
 const TERMINAL_NAMESPACE = "bootstrap-doctor";
+
+const isBootstrapReady = areDoctorChecksReady;
 
 function commandPreview(args) {
   return dockerCommand(args);
@@ -116,7 +114,7 @@ function buildToolchainRepair() {
       TOOLCHAIN_DOCKERFILE,
       TOOLCHAIN_CONTEXT
     ]),
-    label: "Build managed toolchain"
+    label: "Build managed base toolchain"
   });
 }
 
@@ -245,29 +243,9 @@ function codexReauthRepairs(hostNetworkReady) {
   ].filter(Boolean);
 }
 
-function isBootstrapReady(checks) {
-  return checks.every((check) => check.required !== true || check.status === "pass");
-}
-
 function resolveStudioRoot(studioRoot) {
-  const configuredRoot = String(studioRoot || process.env.JSKIT_STUDIO_APP_ROOT || "").trim();
+  const configuredRoot = String(studioRoot || process.env[AI_STUDIO_APP_ROOT_ENV] || "").trim();
   return path.resolve(configuredRoot || process.cwd());
-}
-
-async function runBootstrapStep(emit, {
-  id,
-  label,
-  run
-}) {
-  if (!emit) {
-    return run();
-  }
-  return runDoctorStep({
-    emit,
-    id,
-    label,
-    run
-  });
 }
 
 async function checkDocker() {
@@ -340,10 +318,10 @@ async function checkToolchainImage(dockerReady) {
   if (!dockerReady) {
     return failCheck({
       id: "toolchain-image",
-      label: "Managed toolchain image",
+      label: "Managed base toolchain image",
       expected: `${TOOLCHAIN_IMAGE} exists locally.`,
       observed: "Docker is not ready.",
-      explanation: "Studio cannot inspect the managed toolchain until Docker is ready.",
+      explanation: "Studio cannot inspect the managed base toolchain until Docker is ready.",
       repair: manualDockerRepair()
     });
   }
@@ -355,20 +333,20 @@ async function checkToolchainImage(dockerReady) {
   if (!result.ok) {
     return failCheck({
       id: "toolchain-image",
-      label: "Managed toolchain image",
+      label: "Managed base toolchain image",
       expected: `${TOOLCHAIN_IMAGE} exists locally.`,
       observed: result.output,
-      explanation: "Build the managed toolchain before checking Node, npm, git, GH, and Codex.",
+      explanation: "Build the managed base toolchain before checking git, GH, Codex, and Studio automation tools.",
       repair: buildToolchainRepair()
     });
   }
 
   return passCheck({
     id: "toolchain-image",
-    label: "Managed toolchain image",
+    label: "Managed base toolchain image",
     expected: `${TOOLCHAIN_IMAGE} exists locally.`,
     observed: result.output,
-    explanation: "The managed toolchain image is present."
+    explanation: "The managed base toolchain image is present."
   });
 }
 
@@ -376,9 +354,9 @@ function missingToolchainCheck(id, label) {
   return failCheck({
     id,
     label,
-    expected: "Runs inside the managed toolchain image.",
-    observed: "Managed toolchain image is missing.",
-    explanation: "Build the managed toolchain image first.",
+    expected: "Runs inside the managed base toolchain image.",
+    observed: "Managed base toolchain image is missing.",
+    explanation: "Build the managed base toolchain image first.",
     repair: buildToolchainRepair()
   });
 }
@@ -420,14 +398,14 @@ async function checkHostNetwork(toolchainReady) {
   if (!toolchainReady) {
     return {
       ok: false,
-      output: "Managed toolchain image is missing."
+      output: "Managed base toolchain image is missing."
     };
   }
 
   const result = await runDocker(buildDoctorToolchainArgs([
-    "node",
-    "-e",
-    "process.exit(0)"
+    "bash",
+    "-lc",
+    "true"
   ], ["--network", "host"]), {
     timeout: 20000
   });
@@ -461,7 +439,7 @@ async function checkGitHubAuth(toolchainReady) {
       label: "GitHub login",
       expected: `Logged in to github.com with scopes ${REQUIRED_GH_SCOPES.join(", ")}.`,
       observed: output,
-      explanation: "Studio needs GH authenticated inside the managed toolchain to inspect remotes and run deploy flows later.",
+      explanation: "Studio needs GH authenticated inside the managed base toolchain to inspect remotes and run deploy flows later.",
       repair: ghLoginRepair()
     });
   }
@@ -471,7 +449,7 @@ async function checkGitHubAuth(toolchainReady) {
     label: "GitHub login",
     expected: `Logged in to github.com with scopes ${REQUIRED_GH_SCOPES.join(", ")}.`,
     observed: output,
-    explanation: "GH is authenticated inside the managed toolchain.",
+    explanation: "GH is authenticated inside the managed base toolchain.",
     repair: ghReauthRepair()
   });
 }
@@ -491,7 +469,7 @@ async function checkCodexAuth(toolchainReady, hostNetwork) {
     return failCheck({
       id: "codex-auth",
       label: "Codex login",
-      expected: "Codex login status succeeds inside the managed toolchain.",
+      expected: "Codex login status succeeds inside the managed base toolchain.",
       observed: [
         result.output,
         `Docker host networking: ${hostNetwork.ok ? "available" : hostNetwork.output}`
@@ -507,201 +485,25 @@ async function checkCodexAuth(toolchainReady, hostNetwork) {
   return passCheck({
     id: "codex-auth",
     label: "Codex login",
-    expected: "Codex login status succeeds inside the managed toolchain.",
+    expected: "Codex login status succeeds inside the managed base toolchain.",
     observed: [
       result.output,
       `Docker host networking: ${hostNetwork.ok ? "available" : hostNetwork.output}`
     ].filter(Boolean).join("\n"),
-    explanation: "Codex is authenticated inside the managed toolchain.",
+    explanation: "Codex is authenticated inside the managed base toolchain.",
     repair: repairs[0],
     repairs
   });
 }
 
 async function inspectBootstrap({
-  emit = null
+  emit = null,
+  plugins = []
 } = {}) {
-  const docker = await runBootstrapStep(emit, {
-    id: "docker",
-    label: "Docker engine",
-    run: checkDocker
+  const checks = await runDoctorPlugins({
+    emit,
+    plugins
   });
-  const dockerReady = docker.status === "pass";
-  const compose = await runBootstrapStep(emit, {
-    id: "docker-compose",
-    label: "Docker Compose plugin",
-    run: () => checkDockerCompose(dockerReady)
-  });
-  const mysql = await runBootstrapStep(emit, {
-    id: "mysql-capability",
-    label: "MySQL capability",
-    run: () => checkMysqlCapability({
-      dockerReady,
-      dockerUnavailableRepair: manualDockerRepair()
-    })
-  });
-  const toolchainImage = await runBootstrapStep(emit, {
-    id: "toolchain-image",
-    label: "Managed toolchain image",
-    run: () => checkToolchainImage(dockerReady)
-  });
-  const toolchainReady = toolchainImage.status === "pass";
-  const hostNetwork = await checkHostNetwork(toolchainReady);
-
-  const node = await runBootstrapStep(emit, {
-    id: "node",
-    label: "Node",
-    run: () => toolchainReady
-      ? checkToolchainCommand({
-        id: "node",
-        label: "Node",
-        commandArgs: ["node", "--version"],
-        expected: "Node 22 runs inside the managed toolchain.",
-        explanation: "Studio runs JSKIT commands through the managed Node runtime.",
-        isValid: (output) => /^v22\./.test(output.trim()),
-        repair: buildToolchainRepair()
-      })
-      : missingToolchainCheck("node", "Node")
-  });
-  const npm = await runBootstrapStep(emit, {
-    id: "npm",
-    label: "npm",
-    run: () => toolchainReady
-      ? checkToolchainCommand({
-        id: "npm",
-        label: "npm",
-        commandArgs: ["npm", "--version"],
-        expected: "npm runs inside the managed toolchain.",
-        explanation: "Studio needs npm for installs, scripts, and verification.",
-        isValid: (output) => output.trim().length > 0,
-        repair: buildToolchainRepair()
-      })
-      : missingToolchainCheck("npm", "npm")
-  });
-  const git = await runBootstrapStep(emit, {
-    id: "git",
-    label: "git",
-    run: () => toolchainReady
-      ? checkToolchainCommand({
-        id: "git",
-        label: "git",
-        commandArgs: ["git", "--version"],
-        expected: "git runs inside the managed toolchain.",
-        explanation: "Studio uses git for status, diffs, commits, and deployments.",
-        isValid: (output) => output.includes("git version"),
-        repair: buildToolchainRepair()
-      })
-      : missingToolchainCheck("git", "git")
-  });
-  const ripgrep = await runBootstrapStep(emit, {
-    id: "ripgrep",
-    label: "ripgrep",
-    run: () => toolchainReady
-      ? checkToolchainCommand({
-        id: "ripgrep",
-        label: "ripgrep",
-        commandArgs: ["rg", "--version"],
-        expected: "ripgrep runs inside the managed toolchain.",
-        explanation: "Codex uses rg for fast local codebase search inside the managed toolchain container.",
-        isValid: (output) => output.toLowerCase().includes("ripgrep"),
-        repair: buildToolchainRepair()
-      })
-      : missingToolchainCheck("ripgrep", "ripgrep")
-  });
-  const playwright = await runBootstrapStep(emit, {
-    id: "playwright",
-    label: "Playwright",
-    run: () => toolchainReady
-      ? checkToolchainCommand({
-        id: "playwright",
-        label: "Playwright",
-        commandArgs: [
-          "bash",
-          "-lc",
-          "version=\"$(playwright --version)\" && browser=\"$(find \"$PLAYWRIGHT_BROWSERS_PATH\" -maxdepth 4 -type f \\( -name chrome -o -name chrome-headless-shell \\) | head -n 1)\" && test -n \"$browser\" && printf '%s\\n%s\\n' \"$version\" \"$browser\""
-        ],
-        expected: "Playwright and Chromium run inside the managed toolchain.",
-        explanation: "Studio uses Playwright for local UI verification without reinstalling browsers in every session worktree.",
-        isValid: (output) => output.includes("Version ") && output.includes("/ms-playwright/"),
-        repair: buildToolchainRepair()
-      })
-      : missingToolchainCheck("playwright", "Playwright")
-  });
-  const gh = await runBootstrapStep(emit, {
-    id: "gh",
-    label: "GitHub CLI",
-    run: () => toolchainReady
-      ? checkToolchainCommand({
-        id: "gh",
-        label: "GitHub CLI",
-        commandArgs: ["gh", "--version"],
-        expected: "gh runs inside the managed toolchain.",
-        explanation: "Studio uses GitHub CLI for repository and deploy-adjacent workflows.",
-        isValid: (output) => output.toLowerCase().includes("gh version"),
-        repair: buildToolchainRepair()
-      })
-      : missingToolchainCheck("gh", "GitHub CLI")
-  });
-  const ghAuth = await runBootstrapStep(emit, {
-    id: "gh-auth",
-    label: "GitHub login",
-    run: () => checkGitHubAuth(toolchainReady)
-  });
-  const codex = await runBootstrapStep(emit, {
-    id: "codex",
-    label: "Codex CLI",
-    run: () => toolchainReady
-      ? checkToolchainCommand({
-        id: "codex",
-        label: "Codex CLI",
-        commandArgs: ["codex", "--version"],
-        expected: "Codex runs inside the managed toolchain.",
-        explanation: "Studio delegates implementation work to local Codex sessions.",
-        isValid: (output) => output.trim().length > 0,
-        repair: buildToolchainRepair()
-      })
-      : missingToolchainCheck("codex", "Codex CLI")
-  });
-  const codexSandbox = await runBootstrapStep(emit, {
-    id: "codex-sandbox",
-    label: "Codex sandbox",
-    run: () => toolchainReady
-      ? checkToolchainCommand({
-        id: "codex-sandbox",
-        label: "Codex sandbox",
-        commandArgs: [
-          "bash",
-          "-lc",
-          "command -v bwrap && bwrap --version"
-        ],
-        expected: "bubblewrap is available inside the managed toolchain.",
-        explanation: "Codex uses bubblewrap for sandboxing inside the managed toolchain container.",
-        isValid: (output) => output.includes("bwrap") || output.toLowerCase().includes("bubblewrap"),
-        repair: buildToolchainRepair()
-      })
-      : missingToolchainCheck("codex-sandbox", "Codex sandbox")
-  });
-  const codexAuth = await runBootstrapStep(emit, {
-    id: "codex-auth",
-    label: "Codex login",
-    run: () => checkCodexAuth(toolchainReady, hostNetwork)
-  });
-  const checks = [
-    docker,
-    compose,
-    mysql,
-    toolchainImage,
-    node,
-    npm,
-    git,
-    ripgrep,
-    playwright,
-    gh,
-    ghAuth,
-    codex,
-    codexSandbox,
-    codexAuth
-  ];
 
   return {
     ok: true,
@@ -712,76 +514,210 @@ async function inspectBootstrap({
   };
 }
 
-function createService({ studioRoot = "" } = {}) {
-  const resolvedStudioRoot = resolveStudioRoot(studioRoot);
-  const readyStatusCache = createReadyStatusCache();
-
+function createStudioRuntimeDoctorPlugin({
+  studioRoot = ""
+} = {}) {
   return Object.freeze({
-    async getStatus() {
-      const cachedStatus = readyStatusCache.read();
-      if (cachedStatus) {
-        return cachedStatus;
-      }
-      return readyStatusCache.remember(await inspectBootstrap());
-    },
+    id: "studio-runtime",
+    label: "Studio runtime",
 
-    async streamStatus({ emit } = {}) {
-      return readyStatusCache.remember(await inspectBootstrap({
-        emit
-      }));
-    },
-
-    async repair(input = {}) {
-      const actionId = String(input.actionId || "");
-
-      if (actionId === "build-toolchain") {
-        const args = [
-          "build",
-          "-t",
-          TOOLCHAIN_IMAGE,
-          "-f",
-          TOOLCHAIN_DOCKERFILE,
-          TOOLCHAIN_CONTEXT
-        ];
-        const result = await runDocker(args, {
-          cwd: resolvedStudioRoot,
-          timeout: 10 * 60 * 1000
-        });
-        return {
-          ok: result.ok,
-          actionId,
-          commandPreview: commandPreview(args),
-          output: result.output,
-          status: result.ok ? "completed" : "failed"
-        };
-      }
-
-      if (actionId === "repair-mysql") {
-        return repairMysql();
-      }
-
-      return {
+    checks() {
+      let dockerReady = false;
+      let toolchainReady = false;
+      let hostNetwork = {
         ok: false,
+        output: ""
+      };
+
+      return [
+        {
+          id: "docker",
+          label: "Docker engine",
+          async run() {
+            const result = await checkDocker();
+            dockerReady = result.status === "pass";
+            return result;
+          }
+        },
+        {
+          id: "docker-compose",
+          label: "Docker Compose plugin",
+          run() {
+            return checkDockerCompose(dockerReady);
+          }
+        },
+        {
+          id: "toolchain-image",
+          label: "Managed base toolchain image",
+          async run() {
+            const result = await checkToolchainImage(dockerReady);
+            toolchainReady = result.status === "pass";
+            hostNetwork = await checkHostNetwork(toolchainReady);
+            return result;
+          }
+        },
+        {
+          id: "git",
+          label: "git",
+          run() {
+            return toolchainReady
+              ? checkToolchainCommand({
+                id: "git",
+                label: "git",
+                commandArgs: ["git", "--version"],
+                expected: "git runs inside the managed base toolchain.",
+                explanation: "Studio uses git for status, diffs, commits, and deployments.",
+                isValid: (output) => output.includes("git version"),
+                repair: buildToolchainRepair()
+              })
+              : missingToolchainCheck("git", "git");
+          }
+        },
+        {
+          id: "ripgrep",
+          label: "ripgrep",
+          run() {
+            return toolchainReady
+              ? checkToolchainCommand({
+                id: "ripgrep",
+                label: "ripgrep",
+                commandArgs: ["rg", "--version"],
+                expected: "ripgrep runs inside the managed base toolchain.",
+                explanation: "Codex uses rg for fast local codebase search inside the managed base toolchain container.",
+                isValid: (output) => output.toLowerCase().includes("ripgrep"),
+                repair: buildToolchainRepair()
+              })
+              : missingToolchainCheck("ripgrep", "ripgrep");
+          }
+        },
+        {
+          id: "playwright",
+          label: "Playwright",
+          run() {
+            return toolchainReady
+              ? checkToolchainCommand({
+                id: "playwright",
+                label: "Playwright",
+                commandArgs: [
+                  "bash",
+                  "-lc",
+                  "version=\"$(playwright --version)\" && browser=\"$(find \"$PLAYWRIGHT_BROWSERS_PATH\" -maxdepth 4 -type f \\( -name chrome -o -name chrome-headless-shell \\) | head -n 1)\" && test -n \"$browser\" && printf '%s\\n%s\\n' \"$version\" \"$browser\""
+                ],
+                expected: "Playwright and Chromium run inside the managed base toolchain.",
+                explanation: "Studio uses Playwright for local UI verification without reinstalling browsers in every session worktree.",
+                isValid: (output) => output.includes("Version ") && output.includes("/ms-playwright/"),
+                repair: buildToolchainRepair()
+              })
+              : missingToolchainCheck("playwright", "Playwright");
+          }
+        },
+        {
+          id: "gh",
+          label: "GitHub CLI",
+          run() {
+            return toolchainReady
+              ? checkToolchainCommand({
+                id: "gh",
+                label: "GitHub CLI",
+                commandArgs: ["gh", "--version"],
+                expected: "gh runs inside the managed base toolchain.",
+                explanation: "Studio uses GitHub CLI for repository and deploy-adjacent workflows.",
+                isValid: (output) => output.toLowerCase().includes("gh version"),
+                repair: buildToolchainRepair()
+              })
+              : missingToolchainCheck("gh", "GitHub CLI");
+          }
+        },
+        {
+          id: "gh-auth",
+          label: "GitHub login",
+          run() {
+            return checkGitHubAuth(toolchainReady);
+          }
+        },
+        {
+          id: "codex",
+          label: "Codex CLI",
+          run() {
+            return toolchainReady
+              ? checkToolchainCommand({
+                id: "codex",
+                label: "Codex CLI",
+                commandArgs: ["codex", "--version"],
+                expected: "Codex runs inside the managed base toolchain.",
+                explanation: "Studio delegates implementation work to local Codex sessions.",
+                isValid: (output) => output.trim().length > 0,
+                repair: buildToolchainRepair()
+              })
+              : missingToolchainCheck("codex", "Codex CLI");
+          }
+        },
+        {
+          id: "codex-sandbox",
+          label: "Codex sandbox",
+          run() {
+            return toolchainReady
+              ? checkToolchainCommand({
+                id: "codex-sandbox",
+                label: "Codex sandbox",
+                commandArgs: [
+                  "bash",
+                  "-lc",
+                  "command -v bwrap && bwrap --version"
+                ],
+                expected: "bubblewrap is available inside the managed base toolchain.",
+                explanation: "Codex uses bubblewrap for sandboxing inside the managed base toolchain container.",
+                isValid: (output) => output.includes("bwrap") || output.toLowerCase().includes("bubblewrap"),
+                repair: buildToolchainRepair()
+              })
+              : missingToolchainCheck("codex-sandbox", "Codex sandbox");
+          }
+        },
+        {
+          id: "codex-auth",
+          label: "Codex login",
+          run() {
+            return checkCodexAuth(toolchainReady, hostNetwork);
+          }
+        }
+      ];
+    },
+
+    async repair({
+      actionId = ""
+    } = {}) {
+      if (actionId !== "build-toolchain") {
+        return null;
+      }
+      const args = [
+        "build",
+        "-t",
+        TOOLCHAIN_IMAGE,
+        "-f",
+        TOOLCHAIN_DOCKERFILE,
+        TOOLCHAIN_CONTEXT
+      ];
+      const result = await runDocker(args, {
+        cwd: studioRoot,
+        timeout: 10 * 60 * 1000
+      });
+      return {
+        ok: result.ok,
         actionId,
-        error: "Unknown repair action.",
-        status: "failed"
+        commandPreview: commandPreview(args),
+        output: result.output,
+        status: result.ok ? "completed" : "failed"
       };
     },
 
-    startTerminal(input = {}) {
-      const actionId = String(input.actionId || "");
+    startTerminal({
+      actionId = ""
+    } = {}) {
       if (actionId === "build-toolchain") {
         return startBashTerminal({
           commandPreview: buildToolchainRepair().commandPreview,
-          cwd: resolvedStudioRoot,
+          cwd: studioRoot,
           script: buildToolchainScript()
-        });
-      }
-
-      if (actionId === "repair-mysql") {
-        return startBashTerminal({
-          commandPreview: mysqlRepair().commandPreview,
-          script: buildMysqlRepairScript()
         });
       }
 
@@ -835,6 +771,74 @@ function createService({ studioRoot = "" } = {}) {
         });
       }
 
+      return null;
+    }
+  });
+}
+
+function createService({ studioRoot = "" } = {}) {
+  const resolvedStudioRoot = resolveStudioRoot(studioRoot);
+  const readyStatusCache = createReadyStatusCache();
+  const plugins = [
+    createStudioRuntimeDoctorPlugin({
+      studioRoot: resolvedStudioRoot
+    })
+  ];
+
+  return Object.freeze({
+    async getStatus() {
+      const cachedStatus = readyStatusCache.read();
+      if (cachedStatus) {
+        return cachedStatus;
+      }
+      return readyStatusCache.remember(await inspectBootstrap({
+        plugins
+      }));
+    },
+
+    async streamStatus({ emit } = {}) {
+      return readyStatusCache.remember(await inspectBootstrap({
+        emit,
+        plugins
+      }));
+    },
+
+    async repair(input = {}) {
+      const actionId = String(input.actionId || "");
+      const result = await runDoctorPluginRepair({
+        actionId,
+        context: {
+          studioRoot: resolvedStudioRoot
+        },
+        input,
+        plugins
+      });
+      if (result) {
+        return result;
+      }
+
+      return {
+        ok: false,
+        actionId,
+        error: "Unknown repair action.",
+        status: "failed"
+      };
+    },
+
+    async startTerminal(input = {}) {
+      const actionId = String(input.actionId || "");
+      const terminal = await startDoctorPluginTerminal({
+        actionId,
+        context: {
+          studioRoot: resolvedStudioRoot
+        },
+        input,
+        plugins
+      });
+      if (terminal) {
+        return terminal;
+      }
+
       return {
         ok: false,
         error: "Unknown terminal action."
@@ -861,8 +865,6 @@ export {
   codexDeviceLoginCommandArgs,
   codexLoginRepairs,
   resolveStudioRoot,
-  mysqlCapabilitySql,
-  mysqlRepair,
   isBootstrapReady,
   createService
 };

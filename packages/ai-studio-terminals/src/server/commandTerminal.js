@@ -17,6 +17,10 @@ function actionById(session = {}, actionId = "") {
     .find((action) => action.id === actionId) || null;
 }
 
+function terminalCwd(session = {}, projectService = {}) {
+  return String(session.targetRoot || projectService.targetRoot || "").trim();
+}
+
 async function writeActionTerminalResult({
   action = {},
   exitCode,
@@ -101,6 +105,13 @@ function createCommandTerminalController({ projectService } = {}) {
             error: action.disabledReason || `Action ${action.label || action.id} is disabled.`
           };
         }
+        const cwd = terminalCwd(session, projectService);
+        if (!cwd) {
+          return {
+            ok: false,
+            error: "AI Studio command target root is not available."
+          };
+        }
 
         const commandInput = normalizePlainObject(input?.input);
         const spec = await runtime.adapter.createCommandTerminalSpec(action.id, {
@@ -122,7 +133,7 @@ function createCommandTerminalController({ projectService } = {}) {
           args: spec.args || [],
           command: spec.command,
           commandPreview: spec.commandPreview,
-          cwd: spec.cwd || projectService.targetRoot,
+          cwd: spec.cwd || cwd,
           maxRunning: 1,
           metadata: {
             actionId: action.id,

@@ -18,7 +18,7 @@ const emptyInputValidator = deepFreeze({
 
 const targetScriptTerminalInputValidator = deepFreeze({
   schema: createSchema({
-    scriptName: {
+    scriptId: {
       type: "string",
       noTrim: false,
       required: true
@@ -29,7 +29,7 @@ const targetScriptTerminalInputValidator = deepFreeze({
 
 const starredTargetScriptsInputValidator = deepFreeze({
   schema: createSchema({
-    scriptNames: {
+    scriptIds: {
       type: "array",
       items: {
         type: "string",

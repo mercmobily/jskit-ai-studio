@@ -55,7 +55,7 @@ const featureActions = Object.freeze([
     surfaces: ["home"],
     input: starredTargetScriptsInputValidator,
     output: null,
-    idempotency: "idempotent",
+    idempotency: "optional",
     audit: {
       actionName: ACTION_SAVE_STARRED_TARGET_SCRIPTS
     },
@@ -73,7 +73,7 @@ const featureActions = Object.freeze([
     surfaces: ["home"],
     input: emptyInputValidator,
     output: null,
-    idempotency: "idempotent",
+    idempotency: "optional",
     audit: {
       actionName: ACTION_RESET_STARRED_TARGET_SCRIPTS
     },

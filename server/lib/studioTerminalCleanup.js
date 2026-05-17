@@ -3,9 +3,11 @@ import process from "node:process";
 import { promisify } from "node:util";
 import {
   STUDIO_DAEMON_PID_LABEL,
-  STUDIO_TOOLCHAIN_IMAGE,
   studioDockerLabel
 } from "./studioRuntimeIdentity.js";
+import {
+  STUDIO_TOOLCHAIN_CONTAINER_LABEL
+} from "./doctorToolchain.js";
 
 const execFileAsync = promisify(execFile);
 const STUDIO_CODEX_CONTAINER_LABEL = studioDockerLabel("kind", "codex-terminal");
@@ -40,7 +42,8 @@ function parseProcessRows(output = "") {
 function isStudioToolchainDockerRun(command = "") {
   const normalizedCommand = String(command || "");
   return /\bdocker\s+run\b/u.test(normalizedCommand) &&
-    normalizedCommand.includes(STUDIO_TOOLCHAIN_IMAGE);
+    normalizedCommand.includes(STUDIO_TOOLCHAIN_CONTAINER_LABEL) &&
+    daemonPidFromStudioToolchainCommand(normalizedCommand) > 0;
 }
 
 function normalizeProcessId(value = "") {
@@ -155,7 +158,7 @@ function selectStaleStudioContainerIds(containers = [], {
 
 async function listStudioContainers(execFileImpl = execFileAsync) {
   const containers = new Map();
-  for (const label of [STUDIO_CODEX_CONTAINER_LABEL, STUDIO_TARGET_SCRIPT_CONTAINER_LABEL]) {
+  for (const label of [STUDIO_CODEX_CONTAINER_LABEL, STUDIO_TARGET_SCRIPT_CONTAINER_LABEL, STUDIO_TOOLCHAIN_CONTAINER_LABEL]) {
     const result = await execFileImpl("docker", [
       "ps",
       "-a",

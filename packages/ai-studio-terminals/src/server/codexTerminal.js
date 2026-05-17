@@ -11,11 +11,11 @@ import {
   writeTerminalSession
 } from "../../../../server/lib/terminalSessions.js";
 import {
+  STUDIO_BASE_TOOLCHAIN_IMAGE,
   STUDIO_CODEX_CONTAINER_PREFIX,
   STUDIO_DAEMON_PID_LABEL,
   STUDIO_HOST_GID_ENV,
   STUDIO_HOST_UID_ENV,
-  STUDIO_TOOLCHAIN_IMAGE,
   STUDIO_TOOL_HOME_VOLUME,
   studioDockerLabel
 } from "../../../../server/lib/studioRuntimeIdentity.js";
@@ -24,6 +24,7 @@ import {
 } from "../../../../server/lib/shellCommands.js";
 import {
   containerWorkspacePath,
+  dockerImageExists,
   removeDockerContainer
 } from "../../../../server/lib/containerRuntime.js";
 import {
@@ -50,9 +51,23 @@ const MAX_OPEN_CODEX_TERMINALS = 3;
 const STUDIO_DAEMON_ID = crypto.randomUUID();
 
 function terminalWorkdir(session = {}) {
-  return path.resolve(
-    String(session.metadata?.worktree_path || session.worktree || session.targetRoot || "").trim()
-  );
+  const workdir = String(session.metadata?.worktree_path || session.worktree || session.targetRoot || "").trim();
+  return workdir ? path.resolve(workdir) : "";
+}
+
+function terminalTargetRoot(session = {}, projectService = {}) {
+  const targetRoot = String(session.targetRoot || projectService.targetRoot || "").trim();
+  return targetRoot ? path.resolve(targetRoot) : "";
+}
+
+async function terminalTargetRootForSession(projectService, sessionId) {
+  try {
+    const runtime = await projectService.createRuntime();
+    const session = await runtime.getSession(sessionId);
+    return terminalTargetRoot(session, projectService);
+  } catch {
+    return terminalTargetRoot({}, projectService);
+  }
 }
 
 function normalizeCodexThreadId(value) {
@@ -173,7 +188,7 @@ function codexTerminalArgs({
     `${CODEX_ATTACHMENT_HOST_ROOT}:${CODEX_ATTACHMENT_CONTAINER_ROOT}:ro`,
     "-w",
     worktree,
-    STUDIO_TOOLCHAIN_IMAGE,
+    STUDIO_BASE_TOOLCHAIN_IMAGE,
     "bash",
     "-lc",
     codexStartupScript(codexThreadId)
@@ -188,7 +203,10 @@ function createCodexTerminalController({ projectService } = {}) {
   return Object.freeze({
     async closeAllForSession(sessionId) {
       await closeTerminalSessionsForNamespace(codexTerminalNamespace(sessionId));
-      await cleanupCodexAttachments(projectService.targetRoot, sessionId);
+      const targetRoot = await terminalTargetRootForSession(projectService, sessionId);
+      if (targetRoot) {
+        await cleanupCodexAttachments(targetRoot, sessionId);
+      }
     },
 
     closeTerminal(sessionId, terminalSessionId) {
@@ -254,11 +272,24 @@ function createCodexTerminalController({ projectService } = {}) {
       return aiStudioResult(async () => {
         const runtime = await projectService.createRuntime();
         const session = await runtime.getSession(sessionId);
+        const targetRoot = terminalTargetRoot(session, projectService);
+        if (!targetRoot) {
+          return {
+            ok: false,
+            error: "AI Studio Codex target root is not available."
+          };
+        }
         const workdir = terminalWorkdir(session);
-        if (!containerWorkspacePath(projectService.targetRoot, workdir)) {
+        if (!workdir || !containerWorkspacePath(targetRoot, workdir)) {
           return {
             ok: false,
             error: "AI Studio Codex workdir is outside the target root."
+          };
+        }
+        if (!(await dockerImageExists(STUDIO_BASE_TOOLCHAIN_IMAGE))) {
+          return {
+            ok: false,
+            error: `Managed base toolchain image ${STUDIO_BASE_TOOLCHAIN_IMAGE} is missing. Open Bootup/Setup and run Build managed base toolchain.`
           };
         }
 
@@ -272,13 +303,13 @@ function createCodexTerminalController({ projectService } = {}) {
               terminalId: id
             }),
             sessionId,
-            targetRoot: projectService.targetRoot,
+            targetRoot,
             terminalId: id,
             worktree: workdir
           }),
           command: "docker",
           commandPreview: ({ args }) => dockerCommand(args),
-          cwd: projectService.targetRoot,
+          cwd: targetRoot,
           maxRunning: MAX_OPEN_CODEX_TERMINALS,
           namespace,
           namespaceLimitPrefix: CODEX_TERMINAL_NAMESPACE_PREFIX,
@@ -287,7 +318,7 @@ function createCodexTerminalController({ projectService } = {}) {
               sessionId,
               terminalId: id
             }));
-            await cleanupCodexAttachments(projectService.targetRoot, sessionId);
+            await cleanupCodexAttachments(targetRoot, sessionId);
           },
           reuseRunning: true
         }), session);
@@ -307,11 +338,18 @@ function createCodexTerminalController({ projectService } = {}) {
     async uploadAttachment(sessionId, input = {}) {
       return aiStudioResult(async () => {
         const runtime = await projectService.createRuntime();
-        await runtime.getSession(sessionId);
+        const session = await runtime.getSession(sessionId);
+        const targetRoot = terminalTargetRoot(session, projectService);
+        if (!targetRoot) {
+          return {
+            ok: false,
+            error: "AI Studio Codex target root is not available."
+          };
+        }
         return storeCodexAttachment({
           input,
           sessionId,
-          targetRoot: projectService.targetRoot
+          targetRoot
         });
       });
     },

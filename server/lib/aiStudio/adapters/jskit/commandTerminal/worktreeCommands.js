@@ -2,6 +2,11 @@ import path from "node:path";
 import process from "node:process";
 
 import {
+  optionalSessionPackageHookScript,
+  resolveJskitDevelopmentRepoRoot,
+  SESSION_PROVISION_PACKAGE_SCRIPT
+} from "../sessionHooks.js";
+import {
   isGitWorktree,
   normalizeText,
   readCurrentBranch,
@@ -67,12 +72,16 @@ function createWorktreeScript({
   ].join("\n");
 }
 
-function npmInstallScript(worktreePath = "") {
+function npmInstallScript({
+  provisionHookScript = "",
+  worktreePath = ""
+} = {}) {
   return [
     "set -e",
     `printf '[studio] Installing dependencies in %s\\n' ${shellQuote(worktreePath)}`,
     "printf '[studio] $ npm install --foreground-scripts --no-audit --no-fund\\n\\n'",
-    "NPM_CONFIG_AUDIT=false NPM_CONFIG_FUND=false NPM_CONFIG_YES=true npm_config_audit=false npm_config_fund=false npm_config_yes=true npm install --foreground-scripts --no-audit --no-fund"
+    "AI_STUDIO_SKIP_POSTINSTALL_SESSION_PROVISION=1 NPM_CONFIG_AUDIT=false NPM_CONFIG_FUND=false NPM_CONFIG_YES=true npm_config_audit=false npm_config_fund=false npm_config_yes=true npm install --foreground-scripts --no-audit --no-fund",
+    provisionHookScript
   ].join("\n");
 }
 
@@ -114,7 +123,8 @@ async function createWorktreeTerminalSpec({
 }
 
 async function installDependenciesTerminalSpec({
-  session = {}
+  session = {},
+  targetRoot = ""
 } = {}) {
   const worktreePath = normalizeText(session.metadata?.worktree_path);
   if (!worktreePath) {
@@ -129,8 +139,21 @@ async function installDependenciesTerminalSpec({
       message: `Session worktree is not ready: ${worktreePath}`
     };
   }
+  const resolvedTargetRoot = path.resolve(targetRoot || session.targetRoot || process.cwd());
+  const developmentRepoRoot = await resolveJskitDevelopmentRepoRoot({
+    targetRoot: resolvedTargetRoot
+  });
   return {
-    args: ["-lc", npmInstallScript(worktreePath)],
+    args: ["-lc", npmInstallScript({
+      provisionHookScript: optionalSessionPackageHookScript({
+        developmentRepoRoot,
+        scriptName: SESSION_PROVISION_PACKAGE_SCRIPT,
+        session,
+        targetRoot: resolvedTargetRoot,
+        worktreePath
+      }),
+      worktreePath
+    })],
     command: "bash",
     commandPreview: "npm install --foreground-scripts --no-audit --no-fund",
     cwd: worktreePath,

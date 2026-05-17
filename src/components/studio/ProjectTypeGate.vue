@@ -43,7 +43,9 @@ import {
 } from "@/lib/aiStudioRequestConfig.js";
 import {
   AI_STUDIO_PROJECT_TYPE_API_SUFFIX,
-  TARGET_PROJECT_API_SUFFIX
+  TARGET_PROJECT_API_SUFFIX,
+  projectTypeQueryKey,
+  targetProjectQueryKey
 } from "@/lib/studioGateApi.js";
 
 const emit = defineEmits(["ready", "missing", "error"]);
@@ -56,6 +58,7 @@ const targetProjectView = useView({
   fallbackLoadError: "Target project inspection failed.",
   ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
   placementSource: "ai-studio.target-project.view",
+  queryKeyFactory: targetProjectQueryKey,
   surfaceId: AI_STUDIO_SURFACE_ID
 });
 
@@ -65,6 +68,7 @@ const projectTypeView = useView({
   fallbackLoadError: "Project type could not load.",
   ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
   placementSource: "ai-studio.project-type.view",
+  queryKeyFactory: projectTypeQueryKey,
   surfaceId: AI_STUDIO_SURFACE_ID
 });
 

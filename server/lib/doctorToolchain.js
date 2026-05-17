@@ -1,10 +1,16 @@
+import process from "node:process";
+
 import {
   gitToolchainMountArgs
 } from "./gitToolchainMounts.js";
 import {
-  STUDIO_TOOLCHAIN_IMAGE,
-  STUDIO_TOOL_HOME_VOLUME
+  STUDIO_DAEMON_PID_LABEL,
+  STUDIO_BASE_TOOLCHAIN_IMAGE,
+  STUDIO_TOOL_HOME_VOLUME,
+  studioDockerLabel
 } from "./studioRuntimeIdentity.js";
+
+const STUDIO_TOOLCHAIN_CONTAINER_LABEL = studioDockerLabel("kind", "toolchain");
 
 function normalizeToolchainOptions(options = {}) {
   return Array.isArray(options)
@@ -17,6 +23,7 @@ function normalizeToolchainOptions(options = {}) {
 function buildDoctorToolchainArgs(commandArgs, options = {}) {
   const {
     extraArgs = [],
+    image = STUDIO_BASE_TOOLCHAIN_IMAGE,
     targetRoot = ""
   } = normalizeToolchainOptions(options);
   const workspaceMountArgs = targetRoot
@@ -33,11 +40,15 @@ function buildDoctorToolchainArgs(commandArgs, options = {}) {
     `${STUDIO_TOOL_HOME_VOLUME}:/home/studio`,
     "-e",
     "HOME=/home/studio",
+    "--label",
+    STUDIO_TOOLCHAIN_CONTAINER_LABEL,
+    "--label",
+    `${STUDIO_DAEMON_PID_LABEL}=${process.pid}`,
     ...workspaceMountArgs,
     "-w",
     "/workspace",
     ...extraArgs,
-    STUDIO_TOOLCHAIN_IMAGE,
+    image,
     ...commandArgs
   ];
 }
@@ -52,5 +63,6 @@ function buildDoctorTerminalArgs(commandArgs, options = {}) {
 
 export {
   buildDoctorTerminalArgs,
-  buildDoctorToolchainArgs
+  buildDoctorToolchainArgs,
+  STUDIO_TOOLCHAIN_CONTAINER_LABEL
 };

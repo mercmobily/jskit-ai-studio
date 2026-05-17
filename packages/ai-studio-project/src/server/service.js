@@ -9,9 +9,12 @@ import {
 import {
   aiStudioResult
 } from "../../../../server/lib/aiStudio/serverResponses.js";
+import {
+  AI_STUDIO_TARGET_ROOT_ENV
+} from "../../../../server/lib/studioRuntimeIdentity.js";
 
 function resolveAiStudioTargetRoot(targetRoot) {
-  const configuredRoot = String(targetRoot || process.env.JSKIT_STUDIO_TARGET_ROOT || "").trim();
+  const configuredRoot = String(targetRoot || process.env[AI_STUDIO_TARGET_ROOT_ENV] || "").trim();
   return path.resolve(configuredRoot || process.cwd());
 }
 

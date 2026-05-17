@@ -28,6 +28,11 @@ import {
 import {
   cleanupStaleStudioTerminals
 } from "./server/lib/studioTerminalCleanup.js";
+import {
+  AI_STUDIO_APP_ROOT_ENV,
+  AI_STUDIO_SKIP_STALE_TERMINAL_CLEANUP_ENV,
+  AI_STUDIO_TARGET_ROOT_ENV
+} from "./server/lib/studioRuntimeIdentity.js";
 
 const SPA_INDEX_FILE = "index.html";
 const API_BASE_PATH = "/api";
@@ -200,13 +205,13 @@ function registerTerminalWebSocketRoute(
       socket.on("close", closeSubscription);
       socket.on("error", closeSubscription);
 
-      void subscribe(service, {
+      void Promise.resolve(subscribe(service, {
         sessionId,
         subscriber: (message) => {
           sendSocketJson(socket, message);
         },
         terminalSessionId
-      }).then((result) => {
+      })).then((result) => {
         if (result?.ok === false) {
           closeWithError(1008, result.error || "Terminal session not found.");
           return;
@@ -274,7 +279,7 @@ async function createServer(options = {}) {
       }
     }
   });
-  if (isTruthyEnvValue(process.env.JSKIT_STUDIO_SKIP_STALE_TERMINAL_CLEANUP)) {
+  if (isTruthyEnvValue(process.env[AI_STUDIO_SKIP_STALE_TERMINAL_CLEANUP_ENV])) {
     app.log.warn("Skipping stale Studio terminal cleanup for this process.");
   } else {
     await cleanupStaleStudioTerminals({
@@ -313,13 +318,13 @@ async function createServer(options = {}) {
   const spaDocument = hasWebBuild ? readFileSync(path.resolve(distRoot, SPA_INDEX_FILE), "utf8") : "";
   const providerEnv = {
     ...runtimeEnv,
-    JSKIT_STUDIO_APP_ROOT: appRoot,
-    JSKIT_STUDIO_TARGET_ROOT: targetRoot
+    [AI_STUDIO_APP_ROOT_ENV]: appRoot,
+    [AI_STUDIO_TARGET_ROOT_ENV]: targetRoot
   };
-  const previousStudioAppRoot = process.env.JSKIT_STUDIO_APP_ROOT;
-  const previousStudioTargetRoot = process.env.JSKIT_STUDIO_TARGET_ROOT;
-  process.env.JSKIT_STUDIO_APP_ROOT = appRoot;
-  process.env.JSKIT_STUDIO_TARGET_ROOT = targetRoot;
+  const previousStudioAppRoot = process.env[AI_STUDIO_APP_ROOT_ENV];
+  const previousStudioTargetRoot = process.env[AI_STUDIO_TARGET_ROOT_ENV];
+  process.env[AI_STUDIO_APP_ROOT_ENV] = appRoot;
+  process.env[AI_STUDIO_TARGET_ROOT_ENV] = targetRoot;
   let runtime;
   try {
     runtime = await tryCreateProviderRuntimeFromApp({
@@ -334,14 +339,14 @@ async function createServer(options = {}) {
     });
   } finally {
     if (previousStudioAppRoot == null) {
-      delete process.env.JSKIT_STUDIO_APP_ROOT;
+      delete process.env[AI_STUDIO_APP_ROOT_ENV];
     } else {
-      process.env.JSKIT_STUDIO_APP_ROOT = previousStudioAppRoot;
+      process.env[AI_STUDIO_APP_ROOT_ENV] = previousStudioAppRoot;
     }
     if (previousStudioTargetRoot == null) {
-      delete process.env.JSKIT_STUDIO_TARGET_ROOT;
+      delete process.env[AI_STUDIO_TARGET_ROOT_ENV];
     } else {
-      process.env.JSKIT_STUDIO_TARGET_ROOT = previousStudioTargetRoot;
+      process.env[AI_STUDIO_TARGET_ROOT_ENV] = previousStudioTargetRoot;
     }
   }
 

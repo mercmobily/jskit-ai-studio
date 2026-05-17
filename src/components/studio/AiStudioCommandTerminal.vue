@@ -95,7 +95,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(["finished", "running-changed"]);
+const emit = defineEmits(["closed", "finished", "running-changed"]);
 
 const terminalClosedByUser = ref(false);
 const expanded = ref(true);
@@ -228,7 +228,9 @@ async function startTerminal() {
   }
 }
 
-async function closeTerminal() {
+async function closeTerminal({
+  emitClosed = true
+} = {}) {
   const existingTerminalId = terminalSessionId.value;
   resetTerminalSessionState();
   terminalClosedByUser.value = true;
@@ -237,10 +239,15 @@ async function closeTerminal() {
   if (existingTerminalId && sessionId.value) {
     await closeAiStudioCommandTerminal(sessionId.value, existingTerminalId).catch(() => null);
   }
+  if (emitClosed) {
+    emit("closed");
+  }
 }
 
 async function restartTerminal() {
-  await closeTerminal();
+  await closeTerminal({
+    emitClosed: false
+  });
   resetTerminalDisplay();
   finishedEmittedForTerminalId = "";
   terminalClosedByUser.value = false;
@@ -261,6 +268,8 @@ watch(() => props.startRequestKey, async (nextKey) => {
   }
   handledStartRequestKey = normalizedKey;
   await startTerminal();
+}, {
+  immediate: true
 });
 
 watch(sessionId, () => {

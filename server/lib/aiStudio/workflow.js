@@ -12,7 +12,6 @@ const DEFAULT_AI_STUDIO_WORKFLOW = deepFreeze({
       actions: [
         {
           adapterCapability: "create_worktree",
-          advanceOnSuccess: true,
           disabledReason: "Worktree already exists.",
           disabledWhen: ["metadata:worktree_path"],
           id: "create_worktree",
@@ -32,7 +31,6 @@ const DEFAULT_AI_STUDIO_WORKFLOW = deepFreeze({
       actions: [
         {
           adapterCapability: "install_dependencies",
-          advanceOnSuccess: true,
           disabledReason: "Dependencies are already installed.",
           disabledWhen: ["metadata:dependencies_installed"],
           id: "install_dependencies",

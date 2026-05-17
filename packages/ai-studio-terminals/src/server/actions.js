@@ -35,7 +35,7 @@ const featureActions = Object.freeze([
     surfaces: ["home"],
     input: codexThreadActionInputValidator,
     output: null,
-    idempotency: "idempotent",
+    idempotency: "optional",
     audit: {
       actionName: ACTION_SAVE_CODEX_THREAD
     },
@@ -53,7 +53,7 @@ const featureActions = Object.freeze([
     surfaces: ["home"],
     input: codexPromptHandoffActionInputValidator,
     output: null,
-    idempotency: "idempotent",
+    idempotency: "optional",
     audit: {
       actionName: ACTION_SAVE_CODEX_PROMPT_HANDOFF
     },

@@ -79,12 +79,13 @@ function createService({
             status: "blocked"
           };
         }
-        return runtime.createSession({
+        const session = await runtime.createSession({
           metadata: {
             adapter_id: projectType.adapter?.id || projectType.projectType,
             project_type: projectType.projectType
           }
         });
+        return runtime.advance(session.sessionId);
       });
     },
 

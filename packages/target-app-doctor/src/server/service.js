@@ -10,6 +10,10 @@ import {
   writeTerminalSession
 } from "../../../../server/lib/terminalSessions.js";
 import {
+  AI_STUDIO_APP_ROOT_ENV,
+  AI_STUDIO_TARGET_ROOT_ENV
+} from "../../../../server/lib/studioRuntimeIdentity.js";
+import {
   runDoctorStep
 } from "../../../../server/lib/doctorStream.js";
 import {
@@ -110,9 +114,9 @@ async function hostGitRoot(root) {
 }
 
 function repoNameFromTargetRoot(targetRoot) {
-  return String(path.basename(targetRoot) || "jskit-app")
+  return String(path.basename(targetRoot) || "ai-studio-target")
     .replace(/[^A-Za-z0-9_.-]+/gu, "-")
-    .replace(/^-+|-+$/gu, "") || "jskit-app";
+    .replace(/^-+|-+$/gu, "") || "ai-studio-target";
 }
 
 async function runTargetStep(emit, {
@@ -657,17 +661,17 @@ function startGitIdentityTerminal(targetRoot, inputs = {}) {
   const script = [
     "set -e",
     "set -x",
-    "git config --global user.name \"$JSKIT_GIT_USER_NAME\"",
-    "git config --global user.email \"$JSKIT_GIT_USER_EMAIL\"",
+    "git config --global user.name \"$AI_STUDIO_GIT_USER_NAME\"",
+    "git config --global user.email \"$AI_STUDIO_GIT_USER_EMAIL\"",
     "git config --global --get user.name",
     "git config --global --get user.email"
   ].join("\n");
   const args = buildDoctorTerminalArgs(["bash", "-lc", script], {
     extraArgs: [
       "-e",
-      `JSKIT_GIT_USER_NAME=${inputValidation.name}`,
+      `AI_STUDIO_GIT_USER_NAME=${inputValidation.name}`,
       "-e",
-      `JSKIT_GIT_USER_EMAIL=${inputValidation.email}`
+      `AI_STUDIO_GIT_USER_EMAIL=${inputValidation.email}`
     ],
     targetRoot
   });
@@ -855,8 +859,8 @@ async function inspectTargetApp({
 }
 
 function createService({
-  studioRoot = process.env.JSKIT_STUDIO_APP_ROOT || process.cwd(),
-  targetRoot = process.env.JSKIT_STUDIO_TARGET_ROOT || process.cwd()
+  studioRoot = process.env[AI_STUDIO_APP_ROOT_ENV] || process.cwd(),
+  targetRoot = process.env[AI_STUDIO_TARGET_ROOT_ENV] || process.cwd()
 } = {}) {
   const resolvedStudioRoot = normalizeRoot(studioRoot);
   const resolvedTargetRoot = normalizeRoot(targetRoot);

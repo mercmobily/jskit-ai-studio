@@ -11,7 +11,7 @@
         @click="refreshScripts()"
       />
       <v-btn
-        :disabled="loading || resetBusy"
+        :disabled="loading || resetBusy || starBusy"
         :loading="resetBusy"
         :prepend-icon="mdiRestore"
         size="small"
@@ -88,31 +88,42 @@
         >
           <v-card
             v-for="script in section.scripts"
-            :key="`${section.id}-${script.name}`"
+            :key="`${section.id}-${script.id}`"
             border
             class="target-script-tile"
-            :class="{ 'target-script-tile--starred': isStarred(script.name) }"
+            :class="{ 'target-script-tile--starred': isStarred(script.id) }"
             elevation="0"
           >
             <div class="target-script-tile__top">
-              <code class="target-script-tile__name">{{ script.name }}</code>
+              <div class="target-script-tile__heading">
+                <code class="target-script-tile__name" :title="script.id">
+                  {{ script.label || script.name || script.id }}
+                </code>
+                <v-chip
+                  class="target-script-tile__source"
+                  size="x-small"
+                  variant="tonal"
+                >
+                  {{ script.source }}
+                </v-chip>
+              </div>
               <v-btn
-                :aria-label="isStarred(script.name) ? `Unstar ${script.name}` : `Star ${script.name}`"
-                :disabled="isStarBusy(script.name) || resetBusy"
-                :icon="isStarred(script.name) ? mdiStar : mdiStarOutline"
-                :loading="isStarBusy(script.name)"
+                :aria-label="isStarred(script.id) ? `Unstar ${script.id}` : `Star ${script.id}`"
+                :disabled="starBusy || resetBusy"
+                :icon="isStarred(script.id) ? mdiStar : mdiStarOutline"
+                :loading="isStarBusy(script.id)"
                 color="amber"
                 size="small"
-                :title="isStarred(script.name) ? 'Unstar target script' : 'Star target script'"
+                :title="isStarred(script.id) ? 'Unstar target script' : 'Star target script'"
                 variant="text"
                 @click="toggleStar(script)"
               />
             </div>
             <code class="target-script-tile__command">{{ script.command }}</code>
             <v-btn
-              :aria-label="`Run ${script.name}`"
-              :disabled="Boolean(runBusyName) || isStarBusy(script.name) || resetBusy"
-              :loading="runBusyName === script.name"
+              :aria-label="`Run ${script.id}`"
+              :disabled="Boolean(runBusyId) || isStarBusy(script.id) || resetBusy"
+              :loading="runBusyId === script.id"
               :prepend-icon="mdiPlay"
               block
               class="target-script-tile__run"
@@ -154,7 +165,7 @@
           />
           <v-toolbar-title class="target-script-terminal__toolbar-title">
             <span class="target-script-terminal__title">
-              {{ currentTerminalScriptName || "Target script" }}
+              {{ currentTerminalScriptLabel || "Target script" }}
             </span>
             <span class="target-script-terminal__subtitle">
               {{ terminalCommandPreview || "Ready." }}
@@ -227,7 +238,7 @@ import {
 const {
   canRetry,
   closeTerminal,
-  currentTerminalScriptName,
+  currentTerminalScriptLabel,
   isStarBusy,
   isStarred,
   loadError,
@@ -236,11 +247,12 @@ const {
   resetBusy,
   resetStarred,
   retryTerminal,
-  runBusyName,
+  runBusyId,
   runScript,
   scriptSections,
   scripts,
   sendCtrlC,
+  starBusy,
   terminalCommandPreview,
   terminalError,
   terminalExited,
@@ -344,6 +356,13 @@ const {
   min-width: 0;
 }
 
+.target-script-tile__heading {
+  align-items: center;
+  display: flex;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
 .target-script-tile__name,
 .target-script-tile__command {
   display: block;
@@ -357,6 +376,11 @@ const {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.target-script-tile__source {
+  flex: 0 0 auto;
+  text-transform: uppercase;
 }
 
 .target-script-tile__command {

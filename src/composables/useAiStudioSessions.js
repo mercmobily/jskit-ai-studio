@@ -58,6 +58,9 @@ function useAiStudioSessions({
 
   const selectedSessionId = sessionSelection.selectedId;
   const activeActionId = ref("");
+  const abandonDialogOpen = ref(false);
+  const abandonDialogSessionId = ref("");
+  const abandonDialogSessionTitle = ref("");
   const copyStatus = ref("");
   const codexPromptInjectionKey = ref("");
   const codexPromptOverride = ref("");
@@ -72,6 +75,7 @@ function useAiStudioSessions({
   const draftEditorOpen = ref(false);
   const draftEditorSaving = ref(false);
   const pendingCommandAdvanceOnSuccess = ref(false);
+  const pendingCommandStartedAt = ref(0);
 
   const sessionsApiPath = computed(() => paths.api(AI_STUDIO_SESSIONS_API_SUFFIX, {
     surface: AI_STUDIO_SURFACE_ID
@@ -183,8 +187,13 @@ function useAiStudioSessions({
       error: "AI Studio session could not be abandoned.",
       success: "AI Studio session abandoned."
     },
-    onRunSuccess: async () => {
-      sessionSelection.clear();
+    onRunSuccess: async (_response, { context } = {}) => {
+      if (!context?.sessionId || context.sessionId === selectedSessionId.value) {
+        sessionSelection.clear();
+      }
+      abandonDialogOpen.value = false;
+      abandonDialogSessionId.value = "";
+      abandonDialogSessionTitle.value = "";
       codexPromptOverride.value = "";
       await sessionList.reload();
     },
@@ -215,6 +224,7 @@ function useAiStudioSessions({
     draftEditorLoading.value ||
     draftEditorSaving.value
   ));
+  const commandTerminalVisible = computed(() => Boolean(commandTerminalAction.value || commandTerminalRunning.value));
   const pageLoading = computed(() => Boolean(sessionList.isLoading));
   const pageError = computed(() => {
     return sessionList.loadError ||
@@ -272,6 +282,12 @@ function useAiStudioSessions({
     await sessionList.reload();
   }
 
+  function clearCommandTerminal() {
+    commandTerminalAction.value = null;
+    commandTerminalRunning.value = false;
+    commandTerminalStartKey.value = "";
+  }
+
   function actionShouldAdvance(response = {}, context = {}) {
     return context.advanceOnSuccess === true &&
       response.actionResult?.status === "completed" &&
@@ -279,15 +295,72 @@ function useAiStudioSessions({
       response.next?.enabled === true;
   }
 
+  function latestResultForAction(actionId = "", {
+    since = 0
+  } = {}) {
+    const normalizedActionId = String(actionId || "");
+    if (!normalizedActionId) {
+      return null;
+    }
+    const earliestTime = Number(since || 0);
+    const actionResults = Array.isArray(selectedSession.value?.actionResults)
+      ? selectedSession.value.actionResults
+      : [];
+    return actionResults
+      .filter((result) => result.actionId === normalizedActionId)
+      .filter((result) => {
+        if (!earliestTime) {
+          return true;
+        }
+        const resultTime = new Date(result.at || "").getTime();
+        return Number.isFinite(resultTime) && resultTime >= earliestTime;
+      })
+      .slice()
+      .sort((left, right) => String(left.at || "").localeCompare(String(right.at || "")))
+      .at(-1) || null;
+  }
+
+  async function refreshAfterCommandTerminalSettled({
+    actionId = "",
+    exitCode = null
+  } = {}) {
+    commandTerminalRunning.value = false;
+    activeActionId.value = "";
+    await refreshSessionData();
+    await nextTick();
+
+    const result = latestResultForAction(actionId, {
+      since: pendingCommandStartedAt.value
+    });
+    const commandSucceeded = Number(exitCode) === 0 || result?.status === "completed";
+    if (
+      commandSucceeded &&
+      pendingCommandAdvanceOnSuccess.value &&
+      currentNext.value?.visible === true &&
+      currentNext.value?.enabled === true
+    ) {
+      pendingCommandAdvanceOnSuccess.value = false;
+      pendingCommandStartedAt.value = 0;
+      clearCommandTerminal();
+      await goNext();
+      return;
+    }
+
+    pendingCommandAdvanceOnSuccess.value = false;
+    pendingCommandStartedAt.value = 0;
+  }
+
   function selectSession(sessionId = "") {
     activeActionId.value = "";
+    abandonDialogOpen.value = false;
+    abandonDialogSessionId.value = "";
+    abandonDialogSessionTitle.value = "";
     codexPromptInjectionKey.value = "";
     codexPromptOverride.value = "";
-    commandTerminalAction.value = null;
-    commandTerminalRunning.value = false;
-    commandTerminalStartKey.value = "";
+    clearCommandTerminal();
     draftEditorOpen.value = false;
     pendingCommandAdvanceOnSuccess.value = false;
+    pendingCommandStartedAt.value = 0;
     sessionSelection.select(sessionId);
   }
 
@@ -297,9 +370,11 @@ function useAiStudioSessions({
     }
     copyStatus.value = "";
     if (action.type === "command") {
+      const commandStartedAt = Date.now();
       commandTerminalAction.value = action;
       pendingCommandAdvanceOnSuccess.value = action.advanceOnSuccess === true;
-      commandTerminalStartKey.value = `${selectedSessionId.value}:${action.id}:${Date.now()}`;
+      pendingCommandStartedAt.value = commandStartedAt;
+      commandTerminalStartKey.value = `${selectedSessionId.value}:${action.id}:${commandStartedAt}`;
       return;
     }
     if (action.type === "editor") {
@@ -376,14 +451,37 @@ function useAiStudioSessions({
     await advanceCommand.run({
       sessionId: selectedSessionId.value
     });
+    clearCommandTerminal();
   }
 
-  async function abandonSelectedSession() {
+  function handleCommandTerminalClosed() {
+    clearCommandTerminal();
+  }
+
+  function requestAbandonSelectedSession() {
     if (!selectedSessionId.value || commandBusy.value || isSelectedSessionClosed.value) {
       return;
     }
+    abandonDialogSessionId.value = selectedSessionId.value;
+    abandonDialogSessionTitle.value = selectedSessionTitle.value;
+    abandonDialogOpen.value = true;
+  }
+
+  function cancelAbandonSession() {
+    if (abandonCommand.isRunning) {
+      return;
+    }
+    abandonDialogOpen.value = false;
+    abandonDialogSessionId.value = "";
+    abandonDialogSessionTitle.value = "";
+  }
+
+  async function confirmAbandonSession() {
+    if (!abandonDialogSessionId.value || commandBusy.value || abandonCommand.isRunning) {
+      return;
+    }
     await abandonCommand.run({
-      sessionId: selectedSessionId.value
+      sessionId: abandonDialogSessionId.value
     });
   }
 
@@ -397,20 +495,24 @@ function useAiStudioSessions({
   }
 
   async function handleCommandTerminalFinished(event = {}) {
-    commandTerminalRunning.value = false;
-    activeActionId.value = "";
-    await refreshSessionData();
-    await nextTick();
-    if (
-      event.sessionId === selectedSessionId.value &&
-      Number(event.exitCode) === 0 &&
-      pendingCommandAdvanceOnSuccess.value &&
-      currentNext.value?.visible === true &&
-      currentNext.value?.enabled === true
-    ) {
-      pendingCommandAdvanceOnSuccess.value = false;
-      await goNext();
+    if (event.sessionId && event.sessionId !== selectedSessionId.value) {
+      return;
     }
+    await refreshAfterCommandTerminalSettled({
+      actionId: event.actionId,
+      exitCode: event.exitCode
+    });
+  }
+
+  async function handleCommandTerminalRunningChanged(running) {
+    const wasRunning = commandTerminalRunning.value;
+    commandTerminalRunning.value = Boolean(running);
+    if (commandTerminalRunning.value || !wasRunning) {
+      return;
+    }
+    await refreshAfterCommandTerminalSettled({
+      actionId: commandTerminalAction.value?.id || ""
+    });
   }
 
   async function handleCodexPromptInjected(event = {}) {
@@ -452,7 +554,9 @@ function useAiStudioSessions({
 
   return {
     abandonCommand,
-    abandonSelectedSession,
+    abandonDialogOpen,
+    abandonDialogSessionId,
+    abandonDialogSessionTitle,
     actionIcon,
     actionResultMessage,
     actionResultType,
@@ -461,12 +565,15 @@ function useAiStudioSessions({
     aiStudioSessionStatusColor,
     aiStudioSessionStatusLabel,
     canCreateSession,
+    cancelAbandonSession,
     codexPromptInjectionKey,
     codexPromptOverride,
     commandBusy,
     commandTerminalAction,
     commandTerminalRunning,
     commandTerminalStartKey,
+    commandTerminalVisible,
+    confirmAbandonSession,
     copyStatus,
     createSessionCommand,
     createSessionTitle,
@@ -484,10 +591,13 @@ function useAiStudioSessions({
     handleCodexPromptInjected,
     handleCodexPromptInjectionFailed,
     handleCodexSessionUpdate,
+    handleCommandTerminalClosed,
     handleCommandTerminalFinished,
+    handleCommandTerminalRunningChanged,
     isSelectedSessionClosed,
     pageError,
     pageLoading,
+    requestAbandonSelectedSession,
     runAction,
     runActionCommand,
     saveDraftEditor,

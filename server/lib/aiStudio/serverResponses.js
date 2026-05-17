@@ -2,11 +2,15 @@ function aiStudioErrorResponse(error, {
   fallbackCode = "ai_studio_request_failed",
   fallbackMessage = "AI Studio request failed."
 } = {}) {
+  const code = String(error?.code || fallbackCode);
+  const message = String(error?.message || error || fallbackMessage);
   return {
+    code,
+    error: message,
     errors: [
       {
-        code: String(error?.code || fallbackCode),
-        message: String(error?.message || error || fallbackMessage)
+        code,
+        message
       }
     ],
     ok: false,

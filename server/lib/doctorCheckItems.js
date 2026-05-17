@@ -54,11 +54,50 @@ function passDoctorCheck(details) {
   });
 }
 
+function blockedDoctorCheck(details) {
+  return doctorCheckItem({
+    ...details,
+    status: "blocked"
+  });
+}
+
 function failDoctorCheck(details) {
   return doctorCheckItem({
     ...details,
     status: "fail"
   });
+}
+
+function hardStopDoctorCheck(details) {
+  return doctorCheckItem({
+    ...details,
+    status: "hard-stop"
+  });
+}
+
+function pendingDoctorCheck(check = {}) {
+  return doctorCheckItem({
+    explanation: "This check runs after the previous required checks pass.",
+    expected: check.expected || "This setup check has not run yet.",
+    id: check.id,
+    label: check.label || check.id,
+    observed: "Waiting for previous setup check.",
+    status: "pending"
+  });
+}
+
+function doctorCheckPassed(result = {}) {
+  return result.required === false || result.status === "pass";
+}
+
+function formatDoctorList(items = [], limit = 12) {
+  const values = items.filter(Boolean);
+  if (!values.length) {
+    return "none";
+  }
+  const visible = values.slice(0, limit);
+  const suffix = values.length > visible.length ? `\n...and ${values.length - visible.length} more` : "";
+  return `${visible.join("\n")}${suffix}`;
 }
 
 function manualDoctorRepair({
@@ -75,9 +114,14 @@ function manualDoctorRepair({
 }
 
 export {
+  blockedDoctorCheck,
   createDoctorRepair,
+  doctorCheckPassed,
   doctorCheckItem,
   failDoctorCheck,
+  formatDoctorList,
+  hardStopDoctorCheck,
   manualDoctorRepair,
+  pendingDoctorCheck,
   passDoctorCheck
 };

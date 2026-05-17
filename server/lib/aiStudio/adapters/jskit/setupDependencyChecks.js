@@ -1,10 +1,4 @@
-import { readFile } from "node:fs/promises";
 import path from "node:path";
-
-import {
-  fileExists,
-  readJsonFile
-} from "./appSetupFiles.js";
 
 const CONFIG_IMPORT_FILES = [
   "eslint.config.mjs",
@@ -13,8 +7,10 @@ const CONFIG_IMPORT_FILES = [
   "vitest.config.mjs"
 ];
 
-async function readPackageJson(targetRoot) {
-  const result = await readJsonFile(path.join(targetRoot, "package.json"));
+async function readPackageJson(targetRoot, toolkit) {
+  const result = await toolkit.readTargetJson("package.json", {
+    targetRoot
+  });
   return result.ok ? result.value : null;
 }
 
@@ -32,10 +28,10 @@ function nodeModulePackageJsonPath(targetRoot, packageName) {
   return path.join(targetRoot, "node_modules", ...String(packageName || "").split("/"), "package.json");
 }
 
-async function missingDirectDependencies(targetRoot, packageJson) {
+async function missingDirectDependencies(targetRoot, packageJson, toolkit) {
   const missing = [];
   for (const packageName of directDependencyNames(packageJson)) {
-    if (!await fileExists(nodeModulePackageJsonPath(targetRoot, packageName))) {
+    if (!await toolkit.fileExists(nodeModulePackageJsonPath(targetRoot, packageName))) {
       missing.push(packageName);
     }
   }
@@ -81,10 +77,7 @@ function exportMapHasSubpath(exportsMap, subpathKey) {
   if (!exportsMap) {
     return false;
   }
-  if (typeof exportsMap === "string") {
-    return subpathKey === ".";
-  }
-  if (Array.isArray(exportsMap)) {
+  if (typeof exportsMap === "string" || Array.isArray(exportsMap)) {
     return subpathKey === ".";
   }
   if (typeof exportsMap !== "object") {
@@ -105,7 +98,7 @@ function exportMapHasSubpath(exportsMap, subpathKey) {
   return false;
 }
 
-async function packageSubpathExistsWithoutExportsMap(packageRoot, subpath) {
+async function packageSubpathExistsWithoutExportsMap(packageRoot, subpath, toolkit) {
   const basePath = path.join(packageRoot, ...subpath.split("/"));
   for (const candidate of [
     basePath,
@@ -116,32 +109,31 @@ async function packageSubpathExistsWithoutExportsMap(packageRoot, subpath) {
     path.join(basePath, "index.mjs"),
     path.join(basePath, "index.cjs")
   ]) {
-    if (await fileExists(candidate)) {
+    if (await toolkit.fileExists(candidate)) {
       return true;
     }
   }
   return false;
 }
 
-async function configImportProblems(targetRoot) {
+async function configImportProblems(targetRoot, toolkit) {
   const problems = [];
   for (const fileName of CONFIG_IMPORT_FILES) {
-    let text = "";
-    try {
-      text = await readFile(path.join(targetRoot, fileName), "utf8");
-    } catch {
+    const configFile = await toolkit.readTargetFile(fileName, {
+      targetRoot
+    });
+    if (!configFile.ok) {
       continue;
     }
 
-    for (const specifier of configImportSpecifiersFromText(text)) {
+    for (const specifier of configImportSpecifiersFromText(configFile.value)) {
       const info = packageSpecifierInfo(specifier);
       if (!info?.subpath) {
         continue;
       }
 
       const packageRoot = path.join(targetRoot, "node_modules", ...info.packageName.split("/"));
-      const packageJsonPath = path.join(packageRoot, "package.json");
-      const packageJson = await readJsonFile(packageJsonPath);
+      const packageJson = await toolkit.readJsonFile(path.join(packageRoot, "package.json"));
       if (!packageJson.ok) {
         problems.push(`${fileName}: ${specifier} package metadata is missing.`);
         continue;
@@ -155,7 +147,7 @@ async function configImportProblems(targetRoot) {
         continue;
       }
 
-      if (!await packageSubpathExistsWithoutExportsMap(packageRoot, info.subpath)) {
+      if (!await packageSubpathExistsWithoutExportsMap(packageRoot, info.subpath, toolkit)) {
         problems.push(`${fileName}: ${specifier} is not present in ${info.packageName}@${packageJson.value.version || "unknown"}.`);
       }
     }

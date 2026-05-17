@@ -35,7 +35,7 @@
             title="Abandon session"
             variant="text"
             aria-label="Abandon session"
-            @click.stop="abandonSelectedSession"
+            @click.stop="requestAbandonSelectedSession"
           />
         </v-chip>
 
@@ -144,26 +144,17 @@
             </p>
           </template>
         </AiStudioSessionTimeline>
-      </section>
 
-      <aside class="studio-ai-sessions__side">
         <AiStudioSessionFacts
+          class="studio-ai-sessions__facts"
           :facts="sessionFacts"
           :status-color="aiStudioSessionStatusColor(selectedSession.status)"
           :status-label="aiStudioSessionStatusLabel(selectedSession.status)"
           @copy="copyText"
         />
-      </aside>
+      </section>
 
       <section class="studio-ai-sessions__terminals">
-        <AiStudioCommandTerminal
-          :action="commandTerminalAction"
-          :session="selectedSession"
-          :start-request-key="commandTerminalStartKey"
-          @finished="handleCommandTerminalFinished"
-          @running-changed="commandTerminalRunning = $event"
-        />
-
         <CodexSessionTerminal
           :prompt-injection-request-key="codexPromptInjectionKey"
           :prompt-override="codexPromptOverride"
@@ -172,6 +163,21 @@
           @prompt-injection-failed="handleCodexPromptInjectionFailed"
           @session-update="handleCodexSessionUpdate"
         />
+
+        <div
+          v-if="commandTerminalVisible"
+          class="studio-ai-sessions__command-overlay"
+        >
+          <AiStudioCommandTerminal
+            class="studio-ai-sessions__command-terminal"
+            :action="commandTerminalAction"
+            :session="selectedSession"
+            :start-request-key="commandTerminalStartKey"
+            @closed="handleCommandTerminalClosed"
+            @finished="handleCommandTerminalFinished"
+            @running-changed="handleCommandTerminalRunningChanged"
+          />
+        </div>
       </section>
     </div>
 
@@ -185,11 +191,50 @@
       :saving="draftEditorSaving"
       @save="saveDraftEditor"
     />
+
+    <v-dialog
+      v-model="abandonDialogOpen"
+      max-width="520"
+      persistent
+    >
+      <v-card class="studio-ai-sessions__abandon-dialog">
+        <v-card-title class="studio-ai-sessions__abandon-title">
+          <v-icon :icon="mdiAlertCircleOutline" color="warning" />
+          Abandon session?
+        </v-card-title>
+        <v-card-text>
+          <p class="text-body-2 mb-2">
+            This will mark the session as abandoned and close its terminals.
+          </p>
+          <p class="text-body-2 text-medium-emphasis mb-0">
+            Session: <strong>{{ abandonDialogSessionTitle || shortSessionId(abandonDialogSessionId) }}</strong>
+          </p>
+        </v-card-text>
+        <v-card-actions class="studio-ai-sessions__abandon-actions">
+          <v-btn
+            variant="text"
+            :disabled="abandonCommand.isRunning"
+            @click="cancelAbandonSession"
+          >
+            Cancel
+          </v-btn>
+          <v-btn
+            color="warning"
+            variant="flat"
+            :loading="abandonCommand.isRunning"
+            @click="confirmAbandonSession"
+          >
+            Abandon session
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </v-sheet>
 </template>
 
 <script setup>
 import {
+  mdiAlertCircleOutline,
   mdiArrowRight,
   mdiClose,
   mdiPlus
@@ -208,7 +253,9 @@ const emit = defineEmits(["title-change"]);
 
 const {
   abandonCommand,
-  abandonSelectedSession,
+  abandonDialogOpen,
+  abandonDialogSessionId,
+  abandonDialogSessionTitle,
   actionIcon,
   actionResultMessage,
   actionResultType,
@@ -217,12 +264,14 @@ const {
   aiStudioSessionStatusColor,
   aiStudioSessionStatusLabel,
   canCreateSession,
+  cancelAbandonSession,
   codexPromptInjectionKey,
   codexPromptOverride,
   commandBusy,
   commandTerminalAction,
-  commandTerminalRunning,
   commandTerminalStartKey,
+  commandTerminalVisible,
+  confirmAbandonSession,
   copyStatus,
   copyText,
   createSessionCommand,
@@ -241,10 +290,13 @@ const {
   handleCodexPromptInjected,
   handleCodexPromptInjectionFailed,
   handleCodexSessionUpdate,
+  handleCommandTerminalClosed,
   handleCommandTerminalFinished,
+  handleCommandTerminalRunningChanged,
   isSelectedSessionClosed,
   pageError,
   pageLoading,
+  requestAbandonSelectedSession,
   runAction,
   runActionCommand,
   saveDraftEditor,
@@ -321,12 +373,16 @@ const {
   align-items: flex-start;
   display: grid;
   gap: 0.9rem;
-  grid-template-columns: minmax(0, 1.15fr) minmax(20rem, 0.85fr);
+  grid-template-columns: minmax(22rem, 0.95fr) minmax(24rem, 1.05fr);
 }
 
 .studio-ai-sessions__main,
-.studio-ai-sessions__side {
+.studio-ai-sessions__terminals {
   min-width: 0;
+}
+
+.studio-ai-sessions__facts {
+  margin-top: 0.9rem;
 }
 
 .studio-ai-sessions__heading {
@@ -368,16 +424,51 @@ const {
   margin-top: 0.35rem;
 }
 
+.studio-ai-sessions__abandon-dialog {
+  border: 1px solid rgba(var(--v-theme-warning), 0.32);
+}
+
+.studio-ai-sessions__abandon-title,
+.studio-ai-sessions__abandon-actions {
+  align-items: center;
+  display: flex;
+  gap: 0.55rem;
+}
+
+.studio-ai-sessions__abandon-actions {
+  justify-content: flex-end;
+  padding: 0 1rem 1rem;
+}
+
 .studio-ai-sessions__terminals {
-  display: grid;
-  gap: 0.75rem;
-  grid-column: 1 / -1;
-  min-width: 0;
+  position: sticky;
+  top: 0.75rem;
+}
+
+.studio-ai-sessions__command-overlay {
+  background: rgba(var(--v-theme-surface), 0.94);
+  border-radius: 8px;
+  display: flex;
+  inset: 0;
+  padding: 0.5rem;
+  position: absolute;
+  z-index: 2;
+}
+
+.studio-ai-sessions__command-terminal {
+  flex: 1 1 auto;
+  box-shadow: 0 1rem 2.5rem rgba(0, 0, 0, 0.28);
+  height: 100%;
 }
 
 @media (max-width: 980px) {
   .studio-ai-sessions__layout {
     grid-template-columns: 1fr;
+  }
+
+  .studio-ai-sessions__terminals {
+    position: relative;
+    top: auto;
   }
 }
 

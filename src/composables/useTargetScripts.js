@@ -21,10 +21,11 @@ function commandErrorMessage(command) {
 
 function useTargetScripts() {
   const paths = usePaths();
-  const starBusyName = ref("");
-  const runBusyName = ref("");
+  const starBusyId = ref("");
+  const runBusyId = ref("");
   const terminalVisible = ref(false);
-  const currentTerminalScriptName = ref("");
+  const currentTerminalScriptId = ref("");
+  const currentTerminalScriptLabel = ref("");
 
   const targetScriptsApiPath = computed(() => paths.api(TARGET_SCRIPTS_API_SUFFIX, {
     surface: AI_STUDIO_SURFACE_ID
@@ -53,7 +54,7 @@ function useTargetScripts() {
       path: `${targetScriptsApiPath.value}/starred`
     }),
     buildRawPayload: (_model, { context }) => ({
-      scriptNames: Array.isArray(context.scriptNames) ? context.scriptNames : []
+      scriptIds: Array.isArray(context.scriptIds) ? context.scriptIds : []
     }),
     fallbackRunError: "Could not update starred target scripts.",
     messages: {
@@ -100,7 +101,7 @@ function useTargetScripts() {
       path: targetScriptTerminalApiPath.value
     }),
     buildRawPayload: (_model, { context }) => ({
-      scriptName: String(context.scriptName || "")
+      scriptId: String(context.scriptId || "")
     }),
     fallbackRunError: "Target script terminal failed to start.",
     messages: {
@@ -142,20 +143,20 @@ function useTargetScripts() {
     return Array.isArray(scriptList.pages) && scriptList.pages.length > 0 ? scriptList.pages[0] : {};
   });
   const scripts = computed(() => Array.isArray(scriptList.items) ? scriptList.items : []);
-  const scriptByName = computed(() => new Map(scripts.value.map((script) => [script.name, script])));
-  const starredScriptNames = computed(() => {
-    return Array.isArray(latestScriptsPayload.value?.starredScriptNames)
-      ? latestScriptsPayload.value.starredScriptNames
+  const scriptById = computed(() => new Map(scripts.value.map((script) => [script.id, script])));
+  const starredScriptIds = computed(() => {
+    return Array.isArray(latestScriptsPayload.value?.starredScriptIds)
+      ? latestScriptsPayload.value.starredScriptIds
       : [];
   });
-  const starredSet = computed(() => new Set(starredScriptNames.value));
+  const starredSet = computed(() => new Set(starredScriptIds.value));
   const starredScripts = computed(() => {
-    return starredScriptNames.value
-      .map((scriptName) => scriptByName.value.get(scriptName))
+    return starredScriptIds.value
+      .map((scriptId) => scriptById.value.get(scriptId))
       .filter(Boolean);
   });
   const otherScripts = computed(() => {
-    return scripts.value.filter((script) => !starredSet.value.has(script.name));
+    return scripts.value.filter((script) => !starredSet.value.has(script.id));
   });
   const scriptSections = computed(() => [
     {
@@ -177,10 +178,11 @@ function useTargetScripts() {
   const canRetry = computed(() => {
     return terminal.terminalExited.value &&
       terminal.terminalExitCode.value !== 0 &&
-      Boolean(currentTerminalScriptName.value);
+      Boolean(currentTerminalScriptId.value);
   });
   const loading = computed(() => Boolean(scriptList.isLoading));
   const resetBusy = computed(() => Boolean(resetStarredCommand.isRunning));
+  const starBusy = computed(() => Boolean(starBusyId.value));
   const loadError = computed(() => String(
     scriptList.loadError ||
     commandErrorMessage(saveStarredCommand) ||
@@ -190,12 +192,12 @@ function useTargetScripts() {
     ""
   ));
 
-  function isStarred(scriptName) {
-    return starredSet.value.has(scriptName);
+  function isStarred(scriptId) {
+    return starredSet.value.has(scriptId);
   }
 
-  function isStarBusy(scriptName) {
-    return starBusyName.value === scriptName;
+  function isStarBusy(scriptId) {
+    return starBusyId.value === scriptId;
   }
 
   async function refreshScripts() {
@@ -203,22 +205,22 @@ function useTargetScripts() {
   }
 
   async function toggleStar(script) {
-    const scriptName = String(script?.name || "");
-    if (!scriptName || starBusyName.value) {
+    const scriptId = String(script?.id || "");
+    if (!scriptId || starBusyId.value) {
       return;
     }
-    starBusyName.value = scriptName;
+    starBusyId.value = scriptId;
     try {
-      const nextScriptNames = isStarred(scriptName)
-        ? starredScriptNames.value.filter((name) => name !== scriptName)
-        : [...starredScriptNames.value, scriptName];
+      const nextScriptIds = isStarred(scriptId)
+        ? starredScriptIds.value.filter((id) => id !== scriptId)
+        : [...starredScriptIds.value, scriptId];
       await saveStarredCommand.run({
-        scriptNames: nextScriptNames
+        scriptIds: nextScriptIds
       });
     } catch {
       // useCommand owns the user-visible error message.
     } finally {
-      starBusyName.value = "";
+      starBusyId.value = "";
     }
   }
 
@@ -244,14 +246,15 @@ function useTargetScripts() {
   }
 
   async function runScript(script) {
-    const scriptName = String(script?.name || "");
-    if (!scriptName || runBusyName.value) {
+    const scriptId = String(script?.id || "");
+    if (!scriptId || runBusyId.value) {
       return false;
     }
-    runBusyName.value = scriptName;
+    runBusyId.value = scriptId;
     terminal.terminalStarting.value = true;
     terminalVisible.value = true;
-    currentTerminalScriptName.value = scriptName;
+    currentTerminalScriptId.value = scriptId;
+    currentTerminalScriptLabel.value = String(script?.label || script?.name || scriptId);
     terminal.terminalError.value = "";
     try {
       await closeRunningTerminalOnly();
@@ -261,7 +264,7 @@ function useTargetScripts() {
         throw new Error("Terminal view is not ready yet.");
       }
       const session = await startTerminalCommand.run({
-        scriptName
+        scriptId
       });
       if (!session) {
         return false;
@@ -276,12 +279,12 @@ function useTargetScripts() {
       return false;
     } finally {
       terminal.terminalStarting.value = false;
-      runBusyName.value = "";
+      runBusyId.value = "";
     }
   }
 
   async function retryTerminal() {
-    const script = scriptByName.value.get(currentTerminalScriptName.value);
+    const script = scriptById.value.get(currentTerminalScriptId.value);
     if (script) {
       await runScript(script);
     }
@@ -292,7 +295,8 @@ function useTargetScripts() {
     terminal.resetTerminalSessionState();
     terminal.resetTerminalDisplay();
     terminal.disposeTerminalUi();
-    currentTerminalScriptName.value = "";
+    currentTerminalScriptId.value = "";
+    currentTerminalScriptLabel.value = "";
     terminalVisible.value = false;
   }
 
@@ -304,7 +308,7 @@ function useTargetScripts() {
   return {
     canRetry,
     closeTerminal,
-    currentTerminalScriptName,
+    currentTerminalScriptLabel,
     isStarBusy,
     isStarred,
     loadError,
@@ -313,11 +317,12 @@ function useTargetScripts() {
     resetBusy,
     resetStarred,
     retryTerminal,
-    runBusyName,
+    runBusyId,
     runScript,
     scriptSections,
     scripts,
     sendCtrlC: terminal.sendCtrlC,
+    starBusy,
     terminalCommandPreview: terminal.terminalCommandPreview,
     terminalError: terminal.terminalError,
     terminalExited: terminal.terminalExited,

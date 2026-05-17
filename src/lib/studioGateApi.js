@@ -22,6 +22,14 @@ const TARGET_SETUP_STREAM_ENDPOINT = `${TARGET_SETUP_ENDPOINT}/stream`;
 
 let lastResolvedStudioGate = null;
 
+function projectTypeQueryKey(surfaceId, ownershipFilter) {
+  return ["ai-studio", surfaceId, ownershipFilter, "project-type"];
+}
+
+function targetProjectQueryKey(surfaceId, ownershipFilter) {
+  return ["ai-studio", surfaceId, ownershipFilter, "target-project"];
+}
+
 function rememberStudioGate(gate) {
   lastResolvedStudioGate = gate || null;
   return gate;
@@ -123,10 +131,12 @@ export {
   TARGET_BOOTUP_STREAM_ENDPOINT,
   TARGET_BOOTUP_TERMINAL_ENDPOINT,
   consumeStudioGate,
+  projectTypeQueryKey,
   readTargetSetupStatus,
   readAiStudioProjectType,
   readBootstrapStatus,
   readTargetProject,
   readTargetBootupStatus,
-  resolveStudioGate
+  resolveStudioGate,
+  targetProjectQueryKey
 };

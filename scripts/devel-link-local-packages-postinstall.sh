@@ -81,14 +81,22 @@ infer_session_context() {
     return 1
   fi
 
-  local jskit_root
-  jskit_root="$(dirname "$sessions_root")"
-  if [ "$(basename "$jskit_root")" != ".jskit" ]; then
+  local state_root
+  state_root="$(dirname "$sessions_root")"
+  case "$(basename "$state_root")" in
+    ".ai-studio" | ".jskit")
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+
+  if [ ! -d "$state_root" ]; then
     return 1
   fi
 
   JSKIT_SESSION_ID="$(basename "$JSKIT_SESSION_ROOT")"
-  JSKIT_TARGET_ROOT="$(dirname "$jskit_root")"
+  JSKIT_TARGET_ROOT="$(dirname "$state_root")"
   export JSKIT_SESSION_ID JSKIT_SESSION_ROOT JSKIT_TARGET_ROOT JSKIT_WORKTREE_ROOT
   return 0
 }
@@ -118,6 +126,11 @@ cwd="$(pwd -P)"
 session_context=0
 if infer_session_context; then
   session_context=1
+fi
+
+if [ "$session_context" -eq 1 ] && [ "${AI_STUDIO_SKIP_POSTINSTALL_SESSION_PROVISION-}" = "1" ]; then
+  log "AI Studio will run session package hooks after dependency install; skipping postinstall provisioning."
+  exit 0
 fi
 
 if [ -z "$repo_root" ]; then

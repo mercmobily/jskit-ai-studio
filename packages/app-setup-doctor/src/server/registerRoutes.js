@@ -108,7 +108,7 @@ function registerRoutes(
       if (!requireLocalDoctorRequest(request, reply)) {
         return;
       }
-      const response = getAppSetupDoctorService(app).startTerminal(requestBodyObject(request));
+      const response = await getAppSetupDoctorService(app).startTerminal(requestBodyObject(request));
       reply.code(response.ok === false ? 400 : 200).send(response);
     }
   );

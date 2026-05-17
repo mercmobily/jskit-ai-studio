@@ -20,10 +20,11 @@ import { PromptRenderer } from "../../promptRenderer.js";
 import {
   createJskitTargetScriptTerminalSpec,
   inspectJskitCurrentApp,
-  inspectJskitTargetScripts,
-  resetJskitStarredTargetScripts,
-  saveJskitStarredTargetScripts
+  inspectJskitTargetScripts
 } from "./currentApp.js";
+import {
+  createJskitSetupDoctorPlugin
+} from "./setupDoctorPlugin.js";
 
 const JSKIT_MARKERS = deepFreeze([
   {
@@ -233,6 +234,12 @@ class JskitTargetAdapter extends TargetAdapter {
     return (facts.commands || this.commands).map(adapterCommand);
   }
 
+  async getSetupDoctorPlugins(context = {}) {
+    return [
+      createJskitSetupDoctorPlugin(context)
+    ];
+  }
+
   async createCommandTerminalSpec(commandId, context = {}) {
     if (!this.commandTerminalSpecFactory) {
       return {
@@ -282,19 +289,6 @@ class JskitTargetAdapter extends TargetAdapter {
     targetRoot = ""
   } = {}) {
     return inspectJskitTargetScripts(targetRoot || process.cwd());
-  }
-
-  async saveCurrentAppTargetScriptShortcuts({
-    input = {},
-    targetRoot = ""
-  } = {}) {
-    return saveJskitStarredTargetScripts(targetRoot || process.cwd(), input);
-  }
-
-  async resetCurrentAppTargetScriptShortcuts({
-    targetRoot = ""
-  } = {}) {
-    return resetJskitStarredTargetScripts(targetRoot || process.cwd());
   }
 
   async createCurrentAppTargetScriptTerminalSpec({

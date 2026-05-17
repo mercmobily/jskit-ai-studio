@@ -1,5 +1,9 @@
 import path from "node:path";
 import process from "node:process";
+import {
+  AI_STUDIO_APP_ROOT_ENV,
+  AI_STUDIO_TARGET_ROOT_ENV
+} from "./studioRuntimeIdentity.js";
 
 function normalizeRoot(value, fallbackRoot) {
   const root = String(value || "").trim();
@@ -11,7 +15,7 @@ function resolveStudioAppRoot({
   explicitRoot = "",
   fallbackRoot = process.cwd()
 } = {}) {
-  return normalizeRoot(explicitRoot || env.JSKIT_STUDIO_APP_ROOT, fallbackRoot);
+  return normalizeRoot(explicitRoot || env[AI_STUDIO_APP_ROOT_ENV], fallbackRoot);
 }
 
 function resolveStudioTargetRoot({
@@ -20,8 +24,8 @@ function resolveStudioTargetRoot({
   cwd = process.cwd(),
   studioAppRoot = ""
 } = {}) {
-  if (String(explicitRoot || "").trim() || String(env.JSKIT_STUDIO_TARGET_ROOT || "").trim()) {
-    return normalizeRoot(explicitRoot || env.JSKIT_STUDIO_TARGET_ROOT, cwd);
+  if (String(explicitRoot || "").trim() || String(env[AI_STUDIO_TARGET_ROOT_ENV] || "").trim()) {
+    return normalizeRoot(explicitRoot || env[AI_STUDIO_TARGET_ROOT_ENV], cwd);
   }
 
   const normalizedCwd = normalizeRoot(cwd, process.cwd());

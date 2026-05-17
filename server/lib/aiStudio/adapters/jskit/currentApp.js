@@ -1,11 +1,8 @@
 import { execFile } from "node:child_process";
 import { statSync } from "node:fs";
 import {
-  mkdir,
   readdir,
-  readFile,
-  rm,
-  writeFile
+  readFile
 } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
@@ -22,9 +19,12 @@ import {
   normalizePlainObject
 } from "../../serverResponses.js";
 import {
-  STUDIO_DAEMON_PID_LABEL,
-  STUDIO_TOOLCHAIN_IMAGE as TOOLCHAIN_IMAGE
+  AI_STUDIO_SKIP_STALE_TERMINAL_CLEANUP_ENV,
+  STUDIO_DAEMON_PID_LABEL
 } from "../../../studioRuntimeIdentity.js";
+import {
+  JSKIT_TOOLCHAIN_IMAGE as TOOLCHAIN_IMAGE
+} from "./toolchainIdentity.js";
 import {
   gitToolchainMountArgs
 } from "../../../gitToolchainMounts.js";
@@ -42,7 +42,6 @@ import {
 const execFileAsync = promisify(execFile);
 const TARGET_TERMINAL_CONFIG_DIR = `${AI_STUDIO_STATE_DIR}/config`;
 const TARGET_TERMINAL_HOST_DOCKER_CONFIG = `${TARGET_TERMINAL_CONFIG_DIR}/target_terminal_host_docker`;
-const TARGET_SCRIPT_SHORTCUTS_CONFIG = `${TARGET_TERMINAL_CONFIG_DIR}/target_script_shortcuts`;
 const DEFAULT_TARGET_SCRIPT_NAMES = Object.freeze([
   "jskit:update",
   "devlinks",
@@ -83,7 +82,7 @@ function targetTerminalHostDockerArgs(enabled = false) {
     "-e",
     "DOCKER_HOST=unix:///var/run/docker.sock",
     "-e",
-    "JSKIT_STUDIO_SKIP_STALE_TERMINAL_CLEANUP=1",
+    `${AI_STUDIO_SKIP_STALE_TERMINAL_CLEANUP_ENV}=1`,
     "-v",
     "/var/run/docker.sock:/var/run/docker.sock"
   ];
@@ -280,7 +279,11 @@ function normalizeScripts(packageJson) {
   return Object.entries(normalizePlainObject(packageJson?.scripts))
     .map(([name, command]) => ({
       command: String(command || ""),
-      name: String(name || "")
+      id: `adapter:${String(name || "")}`,
+      label: String(name || ""),
+      name: String(name || ""),
+      source: "adapter",
+      starredByDefault: DEFAULT_TARGET_SCRIPT_NAMES.includes(String(name || ""))
     }))
     .filter((script) => script.name)
     .sort((left, right) => left.name.localeCompare(right.name));
@@ -319,69 +322,24 @@ async function readPackageScripts(appRoot) {
   };
 }
 
-async function readTargetScriptShortcutsConfig(appRoot) {
-  try {
-    const source = await readFile(path.join(appRoot, TARGET_SCRIPT_SHORTCUTS_CONFIG), "utf8");
-    return {
-      exists: true,
-      scriptNames: uniqueTextValues(source.split(/\r?\n/gu))
-    };
-  } catch (error) {
-    if (error?.code === "ENOENT") {
-      return {
-        exists: false,
-        scriptNames: []
-      };
-    }
-    throw new Error(`Cannot read ${TARGET_SCRIPT_SHORTCUTS_CONFIG}: ${String(error?.message || error)}`);
-  }
-}
-
-function defaultTargetScriptNames(scripts = []) {
-  const scriptNames = new Set(scripts.map((script) => script.name));
-  return DEFAULT_TARGET_SCRIPT_NAMES.filter((scriptName) => scriptNames.has(scriptName));
-}
-
-function resolveStarredTargetScriptNames(scripts = [], config = {}) {
-  const existingScriptNames = new Set(scripts.map((script) => script.name));
-  const configured = uniqueTextValues(config.scriptNames || [])
-    .filter((scriptName) => existingScriptNames.has(scriptName));
-  return config.exists ? configured : defaultTargetScriptNames(scripts);
-}
-
 function targetScriptsResponse({
-  config = {},
   packageJsonPath = "",
   scripts = []
 } = {}) {
-  const starredScriptNames = resolveStarredTargetScriptNames(scripts, config);
-  const starredSet = new Set(starredScriptNames);
   return {
-    config: {
-      exists: config.exists === true,
-      path: TARGET_SCRIPT_SHORTCUTS_CONFIG
-    },
     ok: true,
     packageJsonPath,
     scriptCount: scripts.length,
-    scripts: scripts.map((script) => ({
-      ...script,
-      starred: starredSet.has(script.name)
-    })),
-    starredScriptNames
+    scripts
   };
 }
 
 async function inspectJskitTargetScripts(appRoot) {
-  const [scriptsResult, config] = await Promise.all([
-    readPackageScripts(appRoot),
-    readTargetScriptShortcutsConfig(appRoot)
-  ]);
+  const scriptsResult = await readPackageScripts(appRoot);
   if (scriptsResult.ok === false) {
     return scriptsResult;
   }
   return targetScriptsResponse({
-    config,
     packageJsonPath: scriptsResult.packageJsonPath,
     scripts: scriptsResult.scripts
   });
@@ -406,48 +364,12 @@ function validateTargetScriptNames(scriptNames = [], scripts = []) {
   };
 }
 
-async function saveJskitStarredTargetScripts(appRoot, input = {}) {
-  const scriptsResult = await readPackageScripts(appRoot);
-  if (scriptsResult.ok === false) {
-    return scriptsResult;
+function adapterScriptNameFromInput(input = {}) {
+  const scriptId = String(input?.scriptId || "").trim();
+  if (scriptId.startsWith("adapter:")) {
+    return scriptId.slice("adapter:".length).trim();
   }
-  const validation = validateTargetScriptNames(input?.scriptNames, scriptsResult.scripts);
-  if (validation.ok === false) {
-    return validation;
-  }
-  await mkdir(path.dirname(path.join(appRoot, TARGET_SCRIPT_SHORTCUTS_CONFIG)), {
-    recursive: true
-  });
-  const persistedValue = validation.scriptNames.length > 0
-    ? `${validation.scriptNames.join("\n")}\n`
-    : "";
-  await writeFile(path.join(appRoot, TARGET_SCRIPT_SHORTCUTS_CONFIG), persistedValue, "utf8");
-  return targetScriptsResponse({
-    config: {
-      exists: true,
-      scriptNames: validation.scriptNames
-    },
-    packageJsonPath: scriptsResult.packageJsonPath,
-    scripts: scriptsResult.scripts
-  });
-}
-
-async function resetJskitStarredTargetScripts(appRoot) {
-  const scriptsResult = await readPackageScripts(appRoot);
-  if (scriptsResult.ok === false) {
-    return scriptsResult;
-  }
-  await rm(path.join(appRoot, TARGET_SCRIPT_SHORTCUTS_CONFIG), {
-    force: true
-  });
-  return targetScriptsResponse({
-    config: {
-      exists: false,
-      scriptNames: []
-    },
-    packageJsonPath: scriptsResult.packageJsonPath,
-    scripts: scriptsResult.scripts
-  });
+  return "";
 }
 
 function normalizePackageNamesFromManifest(packageJson) {
@@ -570,7 +492,7 @@ async function inspectJskitCurrentApp(targetRoot, {
   includeGit = true
 } = {}) {
   const normalizedTargetRoot = path.resolve(targetRoot || process.cwd());
-  const [markers, directories, localPackages, config, git, targetScripts, appPath] = await Promise.all([
+  const [markers, directories, localPackages, config, git, appPath] = await Promise.all([
     inspectMarkers(normalizedTargetRoot),
     inspectDirectories(normalizedTargetRoot),
     inspectLocalPackages(normalizedTargetRoot),
@@ -578,7 +500,6 @@ async function inspectJskitCurrentApp(targetRoot, {
     inspectGit(normalizedTargetRoot, {
       includeGit
     }),
-    inspectJskitTargetScripts(normalizedTargetRoot),
     defaultAppPath(normalizedTargetRoot)
   ]);
 
@@ -592,18 +513,17 @@ async function inspectJskitCurrentApp(targetRoot, {
     markers: markers.markers,
     ok: true,
     ready: markers.ready,
-    root: normalizedTargetRoot,
-    targetScripts
+    root: normalizedTargetRoot
   };
 }
 
 async function createJskitTargetScriptTerminalSpec(targetRoot, input = {}) {
   const normalizedTargetRoot = path.resolve(targetRoot || process.cwd());
-  const normalizedScriptName = String(input?.scriptName || "").trim();
+  const normalizedScriptName = adapterScriptNameFromInput(input);
   if (!normalizedScriptName) {
     return targetScriptError(
       "missing_target_script",
-      "scriptName must be a package.json script name."
+      "scriptId must identify a JSKIT package script."
     );
   }
   const scriptsResult = await readPackageScripts(normalizedTargetRoot);
@@ -662,13 +582,10 @@ async function createJskitTargetScriptTerminalSpec(targetRoot, input = {}) {
 
 export {
   DEFAULT_TARGET_SCRIPT_NAMES,
-  TARGET_SCRIPT_SHORTCUTS_CONFIG,
   TARGET_TERMINAL_HOST_DOCKER_CONFIG,
   createJskitTargetScriptTerminalSpec,
   inspectJskitCurrentApp,
   inspectJskitTargetScripts,
-  resetJskitStarredTargetScripts,
-  saveJskitStarredTargetScripts,
   targetScriptCommandPreview,
   targetScriptTerminalArgs
 };

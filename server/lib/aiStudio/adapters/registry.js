@@ -3,13 +3,11 @@ import {
   normalizeText
 } from "../core.js";
 import { deepFreeze } from "../deepFreeze.js";
+import {
+  JSKIT_ADAPTER_MANIFEST
+} from "./jskit/manifest.js";
 
-const AI_STUDIO_PROJECT_TYPES = deepFreeze([
-  {
-    enabled: true,
-    id: "jskit",
-    label: "JSKIT"
-  },
+const PLANNED_ADAPTER_MANIFESTS = deepFreeze([
   {
     disabledReason: "Python adapter is not implemented yet.",
     enabled: false,
@@ -30,12 +28,10 @@ const AI_STUDIO_PROJECT_TYPES = deepFreeze([
   }
 ]);
 
-const DEFAULT_ADAPTER_LOADERS = deepFreeze({
-  jskit: async () => {
-    const adapterModule = await import("./jskit/index.js");
-    return adapterModule.createJskitTargetAdapter;
-  }
-});
+const DEFAULT_ADAPTER_MANIFESTS = deepFreeze([
+  JSKIT_ADAPTER_MANIFEST,
+  ...PLANNED_ADAPTER_MANIFESTS
+]);
 
 function publicProjectType(definition = {}) {
   return {
@@ -46,13 +42,34 @@ function publicProjectType(definition = {}) {
   };
 }
 
+function normalizeAdapterManifest(manifest = {}) {
+  const definition = publicProjectType(manifest);
+  return {
+    ...definition,
+    createAdapter: typeof manifest.createAdapter === "function" ? manifest.createAdapter : null
+  };
+}
+
+function assertUniqueAdapterIds(definitions = []) {
+  const seen = new Set();
+  for (const definition of definitions) {
+    if (!definition.id) {
+      throw aiStudioError("AI Studio adapter manifest is missing an id.", "ai_studio_adapter_manifest_invalid");
+    }
+    if (seen.has(definition.id)) {
+      throw aiStudioError(`Duplicate AI Studio adapter id: ${definition.id}.`, "ai_studio_adapter_manifest_duplicate");
+    }
+    seen.add(definition.id);
+  }
+}
+
 function createAiStudioAdapterRegistry({
-  adapterLoaders = DEFAULT_ADAPTER_LOADERS,
-  projectTypes = AI_STUDIO_PROJECT_TYPES
+  adapterManifests = DEFAULT_ADAPTER_MANIFESTS
 } = {}) {
-  const definitions = projectTypes.map(publicProjectType);
+  const definitions = adapterManifests.map(normalizeAdapterManifest);
+  assertUniqueAdapterIds(definitions);
+
   const definitionsById = new Map(definitions.map((definition) => [definition.id, definition]));
-  const loadersById = new Map(Object.entries(adapterLoaders));
 
   function availableProjectTypes() {
     return definitions.map(publicProjectType);
@@ -86,21 +103,13 @@ function createAiStudioAdapterRegistry({
 
   async function createAdapter(projectType) {
     const definition = assertImplementedProjectType(projectType);
-    const loadAdapterFactory = loadersById.get(definition.id);
-    if (typeof loadAdapterFactory !== "function") {
+    if (typeof definition.createAdapter !== "function") {
       throw aiStudioError(
         `AI Studio project type has no adapter factory: ${definition.label}.`,
         "ai_studio_project_type_adapter_missing"
       );
     }
-    const factory = await loadAdapterFactory();
-    if (typeof factory !== "function") {
-      throw aiStudioError(
-        `AI Studio adapter loader did not return a factory: ${definition.label}.`,
-        "ai_studio_project_type_adapter_invalid"
-      );
-    }
-    return factory();
+    return definition.createAdapter();
   }
 
   return Object.freeze({
@@ -111,7 +120,10 @@ function createAiStudioAdapterRegistry({
   });
 }
 
+const AI_STUDIO_PROJECT_TYPES = deepFreeze(DEFAULT_ADAPTER_MANIFESTS.map(publicProjectType));
+
 export {
   AI_STUDIO_PROJECT_TYPES,
-  createAiStudioAdapterRegistry
+  createAiStudioAdapterRegistry,
+  DEFAULT_ADAPTER_MANIFESTS
 };

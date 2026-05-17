@@ -11,13 +11,10 @@ import {
 } from "./commandTerminalSpecs.js";
 export {
   DEFAULT_TARGET_SCRIPT_NAMES,
-  TARGET_SCRIPT_SHORTCUTS_CONFIG,
   TARGET_TERMINAL_HOST_DOCKER_CONFIG,
   createJskitTargetScriptTerminalSpec,
   inspectJskitCurrentApp,
   inspectJskitTargetScripts,
-  resetJskitStarredTargetScripts,
-  saveJskitStarredTargetScripts,
   targetScriptCommandPreview,
   targetScriptTerminalArgs
 } from "./currentApp.js";

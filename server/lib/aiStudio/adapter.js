@@ -102,10 +102,9 @@ function emptyTargetScripts() {
       path: ""
     },
     ok: true,
-    packageJsonPath: "",
     scriptCount: 0,
     scripts: [],
-    starredScriptNames: []
+    starredScriptIds: []
   };
 }
 
@@ -204,6 +203,10 @@ class TargetAdapter {
     return [];
   }
 
+  async getSetupDoctorPlugins() {
+    return [];
+  }
+
   async inspectCurrentApp({ targetRoot = "" } = {}) {
     return {
       adapter: this.id,
@@ -220,20 +223,11 @@ class TargetAdapter {
       markers: [],
       ok: true,
       ready: true,
-      root: normalizeText(targetRoot),
-      targetScripts: emptyTargetScripts()
+      root: normalizeText(targetRoot)
     };
   }
 
   async listCurrentAppTargetScripts() {
-    return emptyTargetScripts();
-  }
-
-  async saveCurrentAppTargetScriptShortcuts() {
-    return emptyTargetScripts();
-  }
-
-  async resetCurrentAppTargetScriptShortcuts() {
     return emptyTargetScripts();
   }
 
