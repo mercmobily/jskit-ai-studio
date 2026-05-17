@@ -1,10 +1,13 @@
-# Future JSKIT Strengthening
+# Future JSKIT Adapter Strengthening
 
-This note records planned JSKIT adapter configuration. These values are not wired into runtime behavior yet.
+This note records planned behavior for JSKIT adapter configuration that already
+exists in AI Studio.
 
-The immediate goal is to make the future choices explicit without adding more moving parts while the JSKIT adapter is still being stabilized.
+The current config screen can save these values and pass them into prompt and
+adapter context. The remaining work is to make JSKIT-specific setup, scaffold,
+doctor, and prompt behavior actively use the selected values.
 
-## Planned Adapter Config Values
+## Adapter Config Values
 
 Store each value as a single file under:
 
@@ -57,7 +60,7 @@ The JSKIT scaffold command should eventually use these values when creating an a
 Affected area:
 
 ```text
-server/lib/aiStudio/adapters/jskit/setupTargetChecks.js
+server/lib/aiStudio/adapters/jskit/setupProjectChecks.js
 ```
 
 Expected future behavior:
@@ -74,7 +77,7 @@ Affected areas:
 
 ```text
 server/lib/aiStudio/adapters/jskit/setupDoctorPlugin.js
-server/lib/aiStudio/adapters/jskit/setupTargetChecks.js
+server/lib/aiStudio/adapters/jskit/setupProjectChecks.js
 server/lib/aiStudio/adapters/jskit/setupMysqlRuntime.js
 ```
 
@@ -95,7 +98,7 @@ Affected area:
 server/lib/aiStudio/adapters/jskit/adapter.js
 ```
 
-Expected future prompt facts:
+Expected prompt facts:
 
 ```json
 {
@@ -134,7 +137,7 @@ Runtime service checks should eventually support both MySQL and Postgres.
 Affected area:
 
 ```text
-server/lib/aiStudio/adapters/jskit/setupTargetChecks.js
+server/lib/aiStudio/adapters/jskit/setupProjectChecks.js
 ```
 
 Current status:
@@ -145,11 +148,10 @@ Current status:
 
 ## Explicit Non-Goals For Now
 
-- Do not implement these config values yet.
-- Do not add a generic adapter config framework yet.
 - Leave scaffold behavior untouched for now.
 - Leave setup doctor behavior untouched for now.
 - Do not add Postgres support yet.
-- Leave JSKIT prompts untouched for now.
+- Do not make JSKIT prompts enforce database or tenancy choices until the
+  matching setup checks are also implemented.
 
-This document is only a map for future JSKIT adapter strengthening.
+This document is the map for the remaining JSKIT adapter strengthening work.

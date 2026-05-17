@@ -2,7 +2,7 @@
   <div class="project-type-gate">
     <StudioErrorNotice
       v-if="errorMessage"
-      title="Project setup could not load"
+      title="Setup could not load"
       :error="errorMessage"
       compact
     />

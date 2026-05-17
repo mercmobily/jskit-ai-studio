@@ -1,20 +1,20 @@
-# Running JSKIT-AI Studio inside JSKIT-AI Studio
+# Running AI Studio inside AI Studio
 
-This document explains the dogfood setup that lets JSKIT-AI Studio operate on
-JSKIT-AI Studio itself, including the slightly unreasonable version where a
+This document explains the dogfood setup that lets AI Studio operate on
+AI Studio itself, including the slightly unreasonable version where a
 Studio session starts another Studio, which starts another Studio, and everyone
 tries to keep a straight face.
 
-The point is not recursion for its own sake. The point is that JSKIT-AI Studio
+The point is not recursion for its own sake. The point is that AI Studio
 is supposed to be good enough to develop itself. That means it must handle the
 same realities it asks user projects to handle: session worktrees, generated
-app setup, dependency installs, app-test containers, Codex terminals, local
+Project Setup, dependency installs, app-test containers, Codex terminals, local
 package development, GitHub PR flows, and dirty-tree checks.
 
 For ordinary apps, this is already a lot. For Studio developing Studio, there is
 one extra twist: Studio depends on JSKIT packages, and many of the changes we
 need while building Studio actually belong in `jskit-ai`, especially
-`@jskit-ai/jskit-cli`, which owns the issue-session runtime. Publishing a new
+`@jskit-ai/jskit-cli`, which owns JSKIT framework behavior. Publishing a new
 npm package for every local runtime tweak would make development slow and
 fragile. So the dogfood setup needs a way to run Studio against local JSKIT
 source, safely, inside managed session worktrees.
@@ -23,7 +23,7 @@ That is where devlinks and sibling repos come in.
 
 ## The Short Version
 
-To run JSKIT-AI Studio inside JSKIT-AI Studio, we need four things to line up:
+To run AI Studio inside AI Studio, we need four things to line up:
 
 1. The Studio worktree must be fully provisioned, not just a bare Git checkout.
 2. Its JSKIT package dependencies must point at editable local package source
@@ -229,7 +229,7 @@ For example:
 The Studio session worktree then links packages from those sibling clones. That
 means Codex can edit both:
 
-- the app under test, such as `jskit-ai-studio`
+- the app under test, such as the AI Studio repository
 - supporting package source, such as `jskit-ai/tooling/jskit-cli`
 
 without writing into the developer's main checkout.
@@ -281,8 +281,8 @@ and normal installs should not accidentally inherit it.
 
 Studio runs a lot of work inside Docker:
 
-- app bootup checks
-- app setup checks
+- Adapter Setup checks
+- Project Setup checks
 - dependency installs
 - Codex terminals
 - app-test terminals
@@ -466,11 +466,11 @@ milliseconds.
 The final development shape is:
 
 1. Start Studio, choose the JSKIT project type, and enable recursive opening in
-   the Studio config screen when dogfooding `jskit-ai-studio`.
-2. Create a JSKIT issue session for `jskit-ai-studio`.
+   the Studio config screen when dogfooding the AI Studio repository.
+2. Create an AI Studio session for the AI Studio repository using the JSKIT adapter.
 3. The session worktree is provisioned with copied config and sibling repos.
 4. The worktree links JSKIT packages from session-owned sibling clones.
-5. App bootup, app setup, app-test, and nested Studio containers mount the
+5. Adapter Setup, Project Setup, app-test, and nested Studio containers mount the
    linked worktree owner root so Git and Node can follow their real paths.
 6. If sibling repos become dirty, finalization can stop and force an explicit
    sibling PR path instead of losing work.
@@ -488,6 +488,6 @@ contracts.
 - Immediate-step guards decide when Studio should stop helping and wait for a
   human to repair the underlying failure.
 
-Once those contracts are in place, JSKIT-AI Studio can develop JSKIT-AI Studio
-using JSKIT-AI Studio. It is recursive, but not mysterious. The stack stops
+Once those contracts are in place, AI Studio can develop AI Studio
+using AI Studio. It is recursive, but not mysterious. The stack stops
 being a hall of mirrors and becomes a set of doors with labels on them.

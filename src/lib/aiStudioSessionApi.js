@@ -70,11 +70,8 @@ async function closeAiStudioAppReviewTerminal(sessionId, terminalSessionId) {
 }
 
 export {
-  aiStudioAppReviewTerminalEndpoint,
   aiStudioAppReviewTerminalWebSocketUrl,
-  aiStudioCodexTerminalEndpoint,
   aiStudioCodexTerminalWebSocketUrl,
-  aiStudioCommandTerminalEndpoint,
   aiStudioCommandTerminalWebSocketUrl,
   closeAiStudioAppReviewTerminal,
   closeAiStudioCodexTerminal,

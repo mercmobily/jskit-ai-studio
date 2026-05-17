@@ -10,14 +10,14 @@ export default function getPlacements() {
 }
 
 addPlacement({
-  id: "jskit-ai-studio.home.menu.bootup-setup",
+  id: "ai-studio.home.menu.setup",
   target: "shell.secondary-nav",
   kind: "link",
   surfaces: ["home"],
   order: 40,
   props: {
-    label: "Bootup/Setup",
-    to: "/bootup-setup",
+    label: "Setup",
+    to: "/setup",
     exact: true
   }
 });
@@ -36,7 +36,7 @@ addPlacement({
 });
 
 addPlacement({
-  id: "jskit-ai-studio.home.menu.history",
+  id: "ai-studio.home.menu.history",
   target: "shell.secondary-nav",
   kind: "link",
   surfaces: ["home"],
@@ -49,7 +49,7 @@ addPlacement({
 });
 
 addPlacement({
-  id: "jskit-ai-studio.home.menu.home",
+  id: "ai-studio.home.menu.home",
   target: "shell.primary-nav",
   kind: "link",
   surfaces: ["home"],

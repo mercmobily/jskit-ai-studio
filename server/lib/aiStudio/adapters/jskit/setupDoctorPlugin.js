@@ -21,9 +21,9 @@ import {
   targetWantsJskitMysql
 } from "./setupMysqlRuntime.js";
 import {
-  createJskitTargetSetupTerminalActions,
-  createJskitTargetSetupChecks
-} from "./setupTargetChecks.js";
+  createJskitProjectSetupTerminalActions,
+  createJskitProjectSetupChecks
+} from "./setupProjectChecks.js";
 import {
   JSKIT_TOOLCHAIN_IMAGE
 } from "./toolchainIdentity.js";
@@ -211,13 +211,13 @@ function createJskitSetupDoctorPlugin({
 
     checks() {
       let jskitToolchainReady = false;
-      const targetSetupChecks = createJskitTargetSetupChecks(toolkit);
+      const projectSetupChecks = createJskitProjectSetupChecks(toolkit);
       const nodeCheck = toolkit.toolchainCommandCheck({
         id: "node",
         label: "Node",
         commandArgs: ["node", "--version"],
         expected: "Node 22 runs inside the JSKIT adapter toolchain.",
-        explanation: "JSKIT target setup runs package scripts through Node.",
+        explanation: "JSKIT Project Setup runs package scripts through Node.",
         image: JSKIT_TOOLCHAIN_IMAGE,
         repair: buildJskitToolchainRepair(),
         validate: (output) => /^v22\./u.test(output.trim())
@@ -227,7 +227,7 @@ function createJskitSetupDoctorPlugin({
         label: "npm",
         commandArgs: ["npm", "--version"],
         expected: "npm runs inside the JSKIT adapter toolchain.",
-        explanation: "JSKIT target setup uses npm for installs and package scripts.",
+        explanation: "JSKIT Project Setup uses npm for installs and package scripts.",
         image: JSKIT_TOOLCHAIN_IMAGE,
         repair: buildJskitToolchainRepair()
       });
@@ -271,8 +271,8 @@ function createJskitSetupDoctorPlugin({
               });
           }
         },
-        targetSetupChecks.scaffold,
-        targetSetupChecks.dependencies,
+        projectSetupChecks.scaffold,
+        projectSetupChecks.dependencies,
         {
           expected: "Managed JSKIT MySQL is ready when the target declares a MySQL runtime.",
           id: "jskit-mysql",
@@ -281,15 +281,15 @@ function createJskitSetupDoctorPlugin({
             return checkJskitMysqlCapability(targetRoot, toolkit);
           }
         },
-        targetSetupChecks.runtimeServices,
-        targetSetupChecks.verificationCommand
+        projectSetupChecks.runtimeServices,
+        projectSetupChecks.verificationCommand
       ];
     },
     terminalActions(context = {}) {
       return [
         startMysqlTerminal,
         buildToolchainTerminal,
-        ...createJskitTargetSetupTerminalActions({
+        ...createJskitProjectSetupTerminalActions({
           targetRoot: context.targetRoot || targetRoot,
           toolkit
         })

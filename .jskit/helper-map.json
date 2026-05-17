@@ -48,7 +48,7 @@
         ]
       },
       {
-        "path": "packages/app-setup-doctor/package.descriptor.mjs",
+        "path": "packages/project-setup-doctor/package.descriptor.mjs",
         "exports": [
           {
             "name": "default",
@@ -58,7 +58,7 @@
         ]
       },
       {
-        "path": "packages/app-setup-doctor/src/server/actions.js",
+        "path": "packages/project-setup-doctor/src/server/actions.js",
         "exports": [
           {
             "name": "ACTION_GET_STATUS",
@@ -73,17 +73,17 @@
         ]
       },
       {
-        "path": "packages/app-setup-doctor/src/server/AppSetupDoctorProvider.js",
+        "path": "packages/project-setup-doctor/src/server/ProjectSetupDoctorProvider.js",
         "exports": [
           {
-            "name": "AppSetupDoctorProvider",
+            "name": "ProjectSetupDoctorProvider",
             "kind": "class",
             "role": "component_or_class"
           }
         ]
       },
       {
-        "path": "packages/app-setup-doctor/src/server/inputSchemas.js",
+        "path": "packages/project-setup-doctor/src/server/inputSchemas.js",
         "exports": [
           {
             "name": "statusQueryInputValidator",
@@ -103,7 +103,7 @@
         ]
       },
       {
-        "path": "packages/app-setup-doctor/src/server/registerRoutes.js",
+        "path": "packages/project-setup-doctor/src/server/registerRoutes.js",
         "exports": [
           {
             "name": "registerRoutes",
@@ -113,7 +113,7 @@
         ]
       },
       {
-        "path": "packages/app-setup-doctor/src/server/service.js",
+        "path": "packages/project-setup-doctor/src/server/service.js",
         "exports": [
           {
             "name": "configImportProblems",
@@ -156,7 +156,7 @@
             "role": "export"
           },
           {
-            "name": "inspectAppSetup",
+            "name": "inspectProjectSetup",
             "kind": "function",
             "role": "export"
           },
@@ -178,7 +178,7 @@
         ]
       },
       {
-        "path": "packages/bootstrap-doctor/package.descriptor.mjs",
+        "path": "packages/studio-setup-doctor/package.descriptor.mjs",
         "exports": [
           {
             "name": "default",
@@ -188,15 +188,15 @@
         ]
       },
       {
-        "path": "packages/bootstrap-doctor/src/server/actions.js",
+        "path": "packages/studio-setup-doctor/src/server/actions.js",
         "exports": [
           {
-            "name": "ACTION_READ_BOOTSTRAP",
+            "name": "ACTION_READ_STUDIO_SETUP",
             "kind": "value",
             "role": "component_or_class"
           },
           {
-            "name": "ACTION_REPAIR_BOOTSTRAP",
+            "name": "ACTION_REPAIR_STUDIO_SETUP",
             "kind": "value",
             "role": "component_or_class"
           },
@@ -208,17 +208,17 @@
         ]
       },
       {
-        "path": "packages/bootstrap-doctor/src/server/BootstrapDoctorProvider.js",
+        "path": "packages/studio-setup-doctor/src/server/StudioSetupDoctorProvider.js",
         "exports": [
           {
-            "name": "BootstrapDoctorProvider",
+            "name": "StudioSetupDoctorProvider",
             "kind": "class",
             "role": "component_or_class"
           }
         ]
       },
       {
-        "path": "packages/bootstrap-doctor/src/server/containerEngine.js",
+        "path": "packages/studio-setup-doctor/src/server/containerEngine.js",
         "exports": [
           {
             "name": "dockerCommand",
@@ -238,10 +238,10 @@
         ]
       },
       {
-        "path": "packages/bootstrap-doctor/src/server/inputSchemas.js",
+        "path": "packages/studio-setup-doctor/src/server/inputSchemas.js",
         "exports": [
           {
-            "name": "bootstrapQueryInputValidator",
+            "name": "studioSetupQueryInputValidator",
             "kind": "value",
             "role": "export"
           },
@@ -263,7 +263,7 @@
         ]
       },
       {
-        "path": "packages/bootstrap-doctor/src/server/registerRoutes.js",
+        "path": "packages/studio-setup-doctor/src/server/registerRoutes.js",
         "exports": [
           {
             "name": "registerRoutes",
@@ -273,7 +273,7 @@
         ]
       },
       {
-        "path": "packages/bootstrap-doctor/src/server/service.js",
+        "path": "packages/studio-setup-doctor/src/server/service.js",
         "exports": [
           {
             "name": "codexBrowserLoginCommandArgs",
@@ -296,7 +296,7 @@
             "role": "helper"
           },
           {
-            "name": "isBootstrapReady",
+            "name": "isStudioSetupReady",
             "kind": "function",
             "role": "helper"
           },
@@ -563,7 +563,7 @@
         ]
       },
       {
-        "path": "packages/target-app-doctor/package.descriptor.mjs",
+        "path": "packages/adapter-setup-doctor/package.descriptor.mjs",
         "exports": [
           {
             "name": "default",
@@ -573,7 +573,7 @@
         ]
       },
       {
-        "path": "packages/target-app-doctor/src/server/actions.js",
+        "path": "packages/adapter-setup-doctor/src/server/actions.js",
         "exports": [
           {
             "name": "ACTION_GET_STATUS",
@@ -588,7 +588,7 @@
         ]
       },
       {
-        "path": "packages/target-app-doctor/src/server/inputSchemas.js",
+        "path": "packages/adapter-setup-doctor/src/server/inputSchemas.js",
         "exports": [
           {
             "name": "statusQueryInputValidator",
@@ -608,7 +608,7 @@
         ]
       },
       {
-        "path": "packages/target-app-doctor/src/server/registerRoutes.js",
+        "path": "packages/adapter-setup-doctor/src/server/registerRoutes.js",
         "exports": [
           {
             "name": "registerRoutes",
@@ -618,7 +618,7 @@
         ]
       },
       {
-        "path": "packages/target-app-doctor/src/server/service.js",
+        "path": "packages/adapter-setup-doctor/src/server/service.js",
         "exports": [
           {
             "name": "createService",
@@ -668,10 +668,10 @@
         ]
       },
       {
-        "path": "packages/target-app-doctor/src/server/TargetAppDoctorProvider.js",
+        "path": "packages/adapter-setup-doctor/src/server/AdapterSetupDoctorProvider.js",
         "exports": [
           {
-            "name": "TargetAppDoctorProvider",
+            "name": "AdapterSetupDoctorProvider",
             "kind": "class",
             "role": "component_or_class"
           }
@@ -993,7 +993,7 @@
         ]
       },
       {
-        "path": "src/components/studio/AppBootupDoctorScreen.vue",
+        "path": "src/components/studio/AdapterSetupDoctorScreen.vue",
         "exports": [
           {
             "name": "default",
@@ -1003,7 +1003,7 @@
         ]
       },
       {
-        "path": "src/components/studio/AppSetupDoctorScreen.vue",
+        "path": "src/components/studio/ProjectSetupDoctorScreen.vue",
         "exports": [
           {
             "name": "default",
@@ -1033,7 +1033,7 @@
         ]
       },
       {
-        "path": "src/components/studio/BootupDoctorScreen.vue",
+        "path": "src/components/studio/StudioSetupDoctorScreen.vue",
         "exports": [
           {
             "name": "default",
@@ -1391,17 +1391,17 @@
             "role": "component_or_class"
           },
           {
-            "name": "BOOTSTRAP_ENDPOINT",
+            "name": "STUDIO_SETUP_ENDPOINT",
             "kind": "value",
             "role": "component_or_class"
           },
           {
-            "name": "BOOTSTRAP_STREAM_ENDPOINT",
+            "name": "STUDIO_SETUP_STREAM_ENDPOINT",
             "kind": "value",
             "role": "component_or_class"
           },
           {
-            "name": "BOOTSTRAP_TERMINAL_ENDPOINT",
+            "name": "STUDIO_SETUP_TERMINAL_ENDPOINT",
             "kind": "value",
             "role": "component_or_class"
           },
@@ -1511,12 +1511,12 @@
             "role": "export"
           },
           {
-            "name": "readAppSetupStatus",
+            "name": "readProjectSetupStatus",
             "kind": "function",
             "role": "helper"
           },
           {
-            "name": "readBootstrapStatus",
+            "name": "readStudioSetupStatus",
             "kind": "function",
             "role": "helper"
           },
@@ -1648,7 +1648,7 @@
         ]
       },
       {
-        "path": "src/pages/bootup-setup.vue",
+        "path": "src/pages/setup.vue",
         "exports": [
           {
             "name": "default",

@@ -37,13 +37,6 @@ declare module 'vue-router/auto-routes' {
       Record<never, never>,
       | never
     >,
-    '/bootup-setup': RouteRecordInfo<
-      '/bootup-setup',
-      '/bootup-setup',
-      Record<never, never>,
-      Record<never, never>,
-      | never
-    >,
     '/home': RouteRecordInfo<
       '/home',
       '/home',
@@ -74,6 +67,13 @@ declare module 'vue-router/auto-routes' {
       Record<never, never>,
       | never
     >,
+    '/setup': RouteRecordInfo<
+      '/setup',
+      '/setup',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
   }
 
   /**
@@ -90,12 +90,6 @@ declare module 'vue-router/auto-routes' {
     'src/pages/index.vue': {
       routes:
         | '/'
-      views:
-        | never
-    }
-    'src/pages/bootup-setup.vue': {
-      routes:
-        | '/bootup-setup'
       views:
         | never
     }
@@ -123,6 +117,12 @@ declare module 'vue-router/auto-routes' {
     'src/pages/home/target-scripts.vue': {
       routes:
         | '/home/target-scripts'
+      views:
+        | never
+    }
+    'src/pages/setup.vue': {
+      routes:
+        | '/setup'
       views:
         | never
     }

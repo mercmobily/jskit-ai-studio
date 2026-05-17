@@ -1,0 +1,69 @@
+<template>
+  <DoctorStatusPage
+    title="Studio Setup"
+    :lede="lede"
+    :status="studioSetup"
+    :loading="loading"
+    :error="errorMessage"
+    stream-enabled
+    :stream-endpoint="STUDIO_SETUP_STREAM_ENDPOINT"
+    :stream-auto-start="streamAutoStart"
+    :terminal-endpoint="STUDIO_SETUP_TERMINAL_ENDPOINT"
+    blocked-label="Studio Setup blocked"
+    ready-label="Studio Setup ready"
+    blocked-title="Studio Setup blocked"
+    ready-title="Studio Setup ready"
+    continue-label="Continue to Adapter Setup"
+    continue-emits
+    :always-repair-check-ids="['gh-auth', 'codex-auth']"
+    @continue="emit('select-tab', 'adapter-setup')"
+    @refresh="loadStudioSetup"
+    @status-updated="handleStudioSetupUpdated"
+  />
+</template>
+
+<script setup>
+import { computed, onMounted, ref } from "vue";
+
+import DoctorStatusPage from "./DoctorStatusPage.vue";
+import {
+  STUDIO_SETUP_STREAM_ENDPOINT,
+  STUDIO_SETUP_TERMINAL_ENDPOINT,
+  readStudioSetupStatus
+} from "../../lib/studioGateApi.js";
+
+const emit = defineEmits(["select-tab"]);
+
+const studioSetup = ref(null);
+const loading = ref(false);
+const errorMessage = ref("");
+const streamAutoStart = ref(false);
+
+const lede = computed(() => {
+  if (studioSetup.value?.ready) {
+    return "Machine runtime is ready. You can rerun checks or re-authenticate managed tools here.";
+  }
+  return "Machine runtime must be ready before Studio can operate on the target project.";
+});
+
+async function loadStudioSetup() {
+  loading.value = true;
+  errorMessage.value = "";
+
+  try {
+    studioSetup.value = await readStudioSetupStatus();
+  } catch (error) {
+    errorMessage.value = String(error?.message || error || "Studio Setup check failed.");
+  } finally {
+    loading.value = false;
+  }
+}
+
+function handleStudioSetupUpdated(status) {
+  studioSetup.value = status;
+}
+
+onMounted(() => {
+  streamAutoStart.value = true;
+});
+</script>

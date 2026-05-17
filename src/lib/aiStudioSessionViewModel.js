@@ -4,16 +4,8 @@ function shortAiStudioSessionId(sessionId) {
   return String(sessionId || "").replace(/^\d{4}-/u, "");
 }
 
-function aiStudioIssueTitleFromText(issueText) {
-  const firstMeaningfulLine = String(issueText || "")
-    .split(/\r?\n/u)
-    .map((line) => line.replace(/^#+\s*/u, "").trim())
-    .find(Boolean);
-  return (firstMeaningfulLine || "").slice(0, 120);
-}
-
 function aiStudioSessionDisplayTitle(session = {}) {
-  const issueTitle = firstText(session?.issueTitle, aiStudioIssueTitleFromText(session?.issueText));
+  const issueTitle = firstText(session?.issueTitle);
   if (issueTitle) {
     return issueTitle;
   }
@@ -96,10 +88,7 @@ function firstText(...values) {
 function aiStudioSessionCurrentStepLabel(session = {}, stepDefinitions = []) {
   const stepId = normalizedText(session?.currentStep);
   const step = stepDefinitions.find((definition) => {
-    if (definition.id === stepId) {
-      return true;
-    }
-    return Array.isArray(definition.sourceStepIds) && definition.sourceStepIds.includes(stepId);
+    return definition.id === stepId;
   });
   return firstText(step?.label, stepId, "No active step");
 }
@@ -113,17 +102,12 @@ function fileHref(filePath) {
 }
 
 function buildAiStudioSessionFacts(session = {}, stepDefinitions = []) {
-  const issueText = String(session.issueText || "");
-  const issueTitle = firstText(session.issueTitle, aiStudioIssueTitleFromText(issueText));
+  const issueTitle = firstText(session.issueTitle);
   const issueLink = parseGithubSessionLink(session.issueUrl, "issue");
   const prLink = parseGithubSessionLink(session.prUrl, "pr");
   const completedStepCount = Array.isArray(session.completedSteps) ? session.completedSteps.length : 0;
   const currentStepLabel = aiStudioSessionCurrentStepLabel(session, stepDefinitions);
-  const nextCommand = firstText(session.nextCommand);
-  const actionCommands = Array.isArray(session.actionCommands)
-    ? session.actionCommands.map((command) => firstText(command?.command)).filter(Boolean)
-    : [];
-  const blueprintPath = firstText(session.blueprintPath, session.blueprint?.path, session.appBlueprintPath);
+  const blueprintPath = firstText(session.blueprintPath);
   const pullRequestPath = firstText(session.pullRequestPath);
   const prOutcome = session.prOutcome && typeof session.prOutcome === "object" ? session.prOutcome : null;
 
@@ -135,26 +119,6 @@ function buildAiStudioSessionFacts(session = {}, stepDefinitions = []) {
       label: "Current Step",
       value: currentStepLabel,
       visible: Boolean(currentStepLabel)
-    },
-    {
-      copyValue: nextCommand,
-      detail: "Same step from the command line",
-      icon: "step",
-      key: "next-command",
-      label: "Next CLI Step",
-      value: nextCommand,
-      visible: Boolean(nextCommand && isOpenAiStudioSession(session))
-    },
-    {
-      copyValue: actionCommands.join("\n"),
-      detail: actionCommands[0] || "",
-      expandable: actionCommands.length > 1,
-      expandedValue: actionCommands.join("\n"),
-      icon: "step",
-      key: "action-commands",
-      label: "Step Commands",
-      value: actionCommands.length === 1 ? actionCommands[0] : `${actionCommands.length} commands`,
-      visible: actionCommands.length > 0
     },
     {
       copyValue: session.sessionRoot || session.sessionId || "",
@@ -194,8 +158,6 @@ function buildAiStudioSessionFacts(session = {}, stepDefinitions = []) {
     },
     {
       detail: issueTitle,
-      expandable: Boolean(issueText),
-      expandedValue: issueText,
       href: session.issueUrl || "",
       icon: "github",
       key: "issue",
@@ -251,7 +213,6 @@ export {
   buildAiStudioSessionFacts,
   aiStudioSessionStatusColor,
   aiStudioSessionStatusLabel,
-  aiStudioIssueTitleFromText,
   parseGithubSessionLink,
   shortAiStudioSessionId
 };

@@ -49,7 +49,7 @@ The runtime still needs a clean programmatic API because Studio must call it. Th
 - All tests must be fast.
 - Tests should focus on state transitions, action availability, adapter contracts, prompt rendering, and session file behavior.
 - Prefer unit tests and small integration tests that run without browsers, external services, long-lived servers, or real GitHub/network calls.
-- Mock adapters, command runners, clocks, and providers where needed.
+- Mock adapters, terminal spec factories, clocks, and providers where needed.
 - If a behavior requires a slow external system to verify, split out the pure decision logic and test that fast path instead.
 
 ## Product Shape
@@ -82,7 +82,7 @@ Target adapters decide:
 - How to start the app if applicable.
 - What files are important.
 - What target-specific context goes into prompts.
-- How deterministic target commands are executed.
+- How deterministic target commands are described for Studio command terminals.
 
 The UI decides:
 
@@ -93,43 +93,34 @@ The UI decides:
 
 The UI must not own workflow state.
 
-## Bootup, App Bootup, And App Setup
+## Studio Setup, Adapter Setup, And Project Setup
 
-The existing product has confusingly similar concepts:
+The setup vocabulary is:
 
-- Bootup
-- App Bootup
-- App Setup
+- Studio Setup: Studio-owned machine and managed toolchain readiness.
+- Adapter Setup: adapter-owned target readiness.
+- Project Setup: target project scaffold, dependency, and project-specific readiness.
 
-These must be considered deliberately during the rebuild. Do not blindly port them.
+The rebuild must keep those boundaries deliberate:
 
-The rebuild must decide:
-
-- Which of these are product-level AI Studio startup concerns.
-- Which are target-project setup concerns.
-- Which are adapter responsibilities.
-- Which are obsolete once target adapters exist.
-- Which screens should remain visible to users.
-- Which concepts should be renamed.
-- Which checks belong before session creation.
-- Which checks belong inside a session step.
+- Studio-owned checks stay in Studio Setup.
+- Adapter-owned checks stay in Adapter Setup.
+- Target project checks stay in Project Setup.
+- Session workflow steps stay inside the session checklist.
 
 Hard rule:
 
-- Do not carry over Bootup, App Bootup, or App Setup as-is.
-- Do not preserve confusing names just because they exist today.
-- Rebuild them around the new architecture and adapter boundary.
+- Do not introduce extra setup names.
+- Do not preserve confusing names because they existed before.
+- Keep all surviving setup screens aligned with the adapter boundary.
 
 Checklist:
 
-- [ ] Inventory current Bootup behavior.
-- [ ] Inventory current App Bootup behavior.
-- [ ] Inventory current App Setup behavior.
-- [ ] Decide which behavior belongs to AI Studio itself.
-- [ ] Decide which behavior belongs to target adapters.
-- [ ] Decide which behavior belongs inside the checklist workflow.
-- [ ] Rename surviving concepts clearly.
-- [ ] Remove obsolete concepts rather than preserving them.
+- [x] Use Studio Setup for Studio-owned machine readiness.
+- [x] Use Adapter Setup for adapter-owned target readiness.
+- [x] Use Project Setup for target project readiness.
+- [x] Confirm every setup behavior lives in the right owner.
+- [x] Remove obsolete setup behavior rather than preserving it.
 
 ## Target Architecture
 
@@ -163,12 +154,17 @@ interface TargetAdapter {
   id: string;
   label: string;
 
-  detect(targetRoot): Promise<AdapterDetection>;
-  inspect(targetRoot): Promise<ProjectFacts>;
+  detect(context): Promise<AdapterDetection>;
+  inspect(context): Promise<ProjectFacts>;
+  getConfigFields(context): Promise<ConfigField[]>;
+  getDefaultConfig(context): Promise<Record<string, string>>;
   getPromptContext(context): Promise<Record<string, string>>;
+  renderPrompt(context): Promise<PromptResult>;
   listCommands(context): Promise<AdapterCommand[]>;
-  runCommand(commandId, context): Promise<ActionResult>;
+  createCommandTerminalSpec(commandId, context): Promise<TerminalSpec>;
+  createAppReviewTerminalSpec(context): Promise<TerminalSpec>;
   getEditableArtifacts(context): Promise<EditableArtifact[]>;
+  getSetupDoctorPlugins(context): Promise<DoctorPlugin[]>;
 }
 ```
 
@@ -855,9 +851,9 @@ Checklist:
 - [ ] State transitions are easy to trace.
 - [ ] No hidden compatibility fallbacks exist.
 - [ ] Core state-machine tests are fast.
-- [ ] Adapter contract tests use fake command runners.
+- [ ] Adapter contract tests use fake terminal spec factories.
 - [ ] Prompt rendering tests do not start terminals.
-- [ ] No e2e tests exist.
+- [ ] No new e2e tests are added or required.
 
 Acceptance:
 
@@ -1066,8 +1062,8 @@ Instructions:
 
 - Create `JskitTargetAdapter`.
 - Detect JSKIT projects.
-- Implement worktree creation through adapter actions or capabilities.
-- Implement dependency install through adapter actions.
+- Implement worktree creation through adapter command capabilities and terminal specs.
+- Implement dependency install through adapter command capabilities and terminal specs.
 - Implement JSKIT prompt context.
 - Implement issue file and GitHub issue flow through the new core.
 - Keep issue submission from auto-advancing; user must press `Next`.
@@ -1084,7 +1080,7 @@ Checklist:
 - [x] GitHub issue creation action exists.
 - [x] `issue_url` is stored as durable session metadata.
 - [x] `Next` enables only after issue submission.
-- [x] Fast tests cover JSKIT capability mapping with fake command runners.
+- [x] Fast tests cover JSKIT capability mapping with fake terminal spec factories.
 
 Acceptance:
 
@@ -1163,7 +1159,7 @@ Goal: Make Studio a thin renderer over the new runtime session view.
 Runtime wiring rule for slices 9-13:
 
 - Do not build compatibility bridges.
-- Do not normalize runtime data into unrelated issue-session shapes.
+- Do not normalize runtime data into unrelated legacy workflow shapes.
 - Do not preserve unused UI contracts just to keep the workflow usable mid-slice.
 - The app must still compile and boot.
 - The Studio workflow may be incomplete until Slice 13 is finished.
@@ -1319,7 +1315,7 @@ Goal: Keep one Studio session workflow after the runtime is wired and proven.
 
 Instructions:
 
-- Remove duplicate issue-session workflow state code.
+- Remove duplicate legacy workflow state code.
 - Remove duplicate UI workflow inference.
 - Remove duplicate prompt-generation paths.
 - Remove deterministic command dispatch paths that duplicate runtime actions.
@@ -1332,22 +1328,22 @@ Instructions:
 
 Checklist:
 
-- [ ] Duplicate issue-session state machine code is deleted.
-- [ ] Duplicate issue-session button mapping code is deleted.
-- [ ] Duplicate issue-session prompt construction code is deleted.
-- [ ] Duplicate issue-session command execution code is deleted.
-- [ ] Non-`.ai-studio` Studio workflow reads are absent.
-- [ ] Replaced API routes are deleted.
-- [ ] Replaced client API helpers are deleted.
-- [ ] Dead view-model branches are deleted.
-- [ ] No compatibility routes remain.
-- [ ] No fallback executor remains.
+- [x] Duplicate legacy state machine code is deleted.
+- [x] Duplicate legacy button mapping code is deleted.
+- [x] Duplicate legacy prompt construction code is deleted.
+- [x] Duplicate legacy command execution code is deleted.
+- [x] Non-`.ai-studio` Studio workflow reads are absent.
+- [x] Replaced API routes are deleted.
+- [x] Replaced client API helpers are deleted.
+- [x] Dead view-model branches are deleted.
+- [x] No compatibility routes remain.
+- [x] No fallback executor remains.
 - [ ] Fast tests cover the runtime path.
 
 Acceptance:
 
 - Studio uses one workflow system: the AI Studio runtime.
-- Searching the codebase does not reveal an alternate issue-session workflow path.
+- Searching the codebase does not reveal an alternate legacy workflow path.
 
 ### SLICE 15: Final Audit And Simplification
 
@@ -1356,7 +1352,7 @@ Goal: Make Studio feel like one coherent product, with clear vocabulary and no u
 Instructions:
 
 - Search for stale JSKIT product naming outside adapter-owned code.
-- Search for Bootup, App Bootup, and App Setup concepts.
+- Search for retired setup concepts.
 - Search for session-root assumptions, compatibility language, and fallback behavior.
 - Remove dead files, dead tests, and unused exports.
 - Simplify names that still describe implementation history instead of product behavior.
@@ -1366,16 +1362,16 @@ Instructions:
 
 Checklist:
 
-- [ ] No stale JSKIT product naming remains outside JSKIT adapter code.
-- [ ] No non-`.ai-studio` session root behavior remains.
-- [ ] No compatibility or migration behavior remains.
-- [ ] No duplicate workflow state remains.
-- [ ] Bootup/App Bootup/App Setup concepts are either renamed clearly or deleted.
-- [ ] Dead files are deleted.
-- [ ] Unused exports are deleted.
+- [x] No stale JSKIT product naming remains outside JSKIT adapter code.
+- [x] No non-`.ai-studio` session root behavior remains.
+- [x] No compatibility or migration behavior remains.
+- [x] No duplicate workflow state remains.
+- [x] Studio Setup, Adapter Setup, and Project Setup are the only setup concepts.
+- [x] Dead files are deleted.
+- [x] Unused exports are deleted.
 - [ ] Tests describe current behavior.
 - [ ] Fast test suite passes.
-- [ ] Documentation matches the final architecture.
+- [x] Documentation matches the final architecture.
 
 Acceptance:
 
@@ -1414,7 +1410,7 @@ Use the execution slices above as the primary plan. This shorter order is only a
 - [ ] Adapter discovery rules.
 - [ ] Whether GitHub provider is core or pluggable from day one.
 - [ ] Whether worktrees are core or adapter capability.
-- [ ] What Bootup, App Bootup, and App Setup become in the new architecture.
+- [x] Final setup vocabulary.
 - [ ] How to represent unavailable steps.
 - [ ] How to show disabled reasons in Studio.
 
@@ -1442,5 +1438,5 @@ The rebuild is successful when:
 - [ ] Prompts adapt to the target environment.
 - [ ] No npm assumptions exist outside web/JSKIT adapters.
 - [ ] No JSKIT assumptions exist in the core runtime.
-- [ ] No duplicate issue-session workflow remains.
+- [ ] No duplicate legacy workflow remains.
 - [ ] A developer can add a simple adapter without reading UI code.

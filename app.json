@@ -1,5 +1,5 @@
 {
-  "name": "jskit-ai-studio",
+  "name": "ai-studio",
   "healthchecks": {
     "web": [
       {

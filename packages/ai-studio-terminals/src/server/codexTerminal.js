@@ -357,7 +357,7 @@ function createCodexTerminalController({ projectService } = {}) {
         if (!(await dockerImageExists(STUDIO_BASE_TOOLCHAIN_IMAGE))) {
           return {
             ok: false,
-            error: `Managed base toolchain image ${STUDIO_BASE_TOOLCHAIN_IMAGE} is missing. Open Bootup/Setup and run Build managed base toolchain.`
+            error: `Managed base toolchain image ${STUDIO_BASE_TOOLCHAIN_IMAGE} is missing. Open Setup and run Build managed base toolchain.`
           };
         }
 

@@ -5,7 +5,7 @@ import {
 
 const AI_STUDIO_SESSIONS_API_SUFFIX = "/ai-studio/sessions";
 const DEFAULT_MAX_OPEN_SESSIONS = 3;
-const SELECTED_SESSION_STORAGE_KEY = "jskit-ai-studio:selected-ai-studio-session-id";
+const SELECTED_SESSION_STORAGE_KEY = "ai-studio:selected-session-id";
 
 function aiStudioSessionsQueryKey(surfaceId, ownershipFilter) {
   return ["ai-studio", surfaceId, ownershipFilter, "sessions"];

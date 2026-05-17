@@ -17,25 +17,25 @@ Root package: jskit-ai-studio
     - surfaceAccessPolicies (export, export)
     - surfaceAccessPolicies (value, export)
 
-- packages/app-setup-doctor/package.descriptor.mjs
+- packages/project-setup-doctor/package.descriptor.mjs
     - default (default, default)
 
-- packages/app-setup-doctor/src/server/actions.js
+- packages/project-setup-doctor/src/server/actions.js
     - ACTION_GET_STATUS (value, component_or_class)
     - featureActions (value, export)
 
-- packages/app-setup-doctor/src/server/AppSetupDoctorProvider.js
-    - AppSetupDoctorProvider (class, component_or_class)
+- packages/project-setup-doctor/src/server/ProjectSetupDoctorProvider.js
+    - ProjectSetupDoctorProvider (class, component_or_class)
 
-- packages/app-setup-doctor/src/server/inputSchemas.js
+- packages/project-setup-doctor/src/server/inputSchemas.js
     - statusQueryInputValidator (value, export)
     - terminalInputValidator (value, export)
     - terminalStartInputValidator (value, export)
 
-- packages/app-setup-doctor/src/server/registerRoutes.js
+- packages/project-setup-doctor/src/server/registerRoutes.js
     - registerRoutes (function, export)
 
-- packages/app-setup-doctor/src/server/service.js
+- packages/project-setup-doctor/src/server/service.js
     - configImportProblems (function, export)
     - configImportSpecifiersFromText (function, export)
     - createService (function, helper)
@@ -44,42 +44,42 @@ Root package: jskit-ai-studio
     - ghRepoCreateScript (function, export)
     - gitCheckpointScript (function, export)
     - githubBranchRefApiPath (function, export)
-    - inspectAppSetup (function, export)
+    - inspectProjectSetup (function, export)
     - missingDirectDependencies (function, export)
     - npmInstallScript (function, export)
     - onlyUiVerificationDoctorIssues (function, export)
 
-- packages/bootstrap-doctor/package.descriptor.mjs
+- packages/studio-setup-doctor/package.descriptor.mjs
     - default (default, default)
 
-- packages/bootstrap-doctor/src/server/actions.js
-    - ACTION_READ_BOOTSTRAP (value, component_or_class)
-    - ACTION_REPAIR_BOOTSTRAP (value, component_or_class)
+- packages/studio-setup-doctor/src/server/actions.js
+    - ACTION_READ_STUDIO_SETUP (value, component_or_class)
+    - ACTION_REPAIR_STUDIO_SETUP (value, component_or_class)
     - featureActions (value, export)
 
-- packages/bootstrap-doctor/src/server/BootstrapDoctorProvider.js
-    - BootstrapDoctorProvider (class, component_or_class)
+- packages/studio-setup-doctor/src/server/StudioSetupDoctorProvider.js
+    - StudioSetupDoctorProvider (class, component_or_class)
 
-- packages/bootstrap-doctor/src/server/containerEngine.js
+- packages/studio-setup-doctor/src/server/containerEngine.js
     - dockerCommand (function, export)
     - runDocker (function, helper)
     - shellQuote (function, export)
 
-- packages/bootstrap-doctor/src/server/inputSchemas.js
-    - bootstrapQueryInputValidator (value, export)
+- packages/studio-setup-doctor/src/server/inputSchemas.js
+    - studioSetupQueryInputValidator (value, export)
     - repairInputValidator (value, export)
     - terminalInputValidator (value, export)
     - terminalStartInputValidator (value, export)
 
-- packages/bootstrap-doctor/src/server/registerRoutes.js
+- packages/studio-setup-doctor/src/server/registerRoutes.js
     - registerRoutes (function, export)
 
-- packages/bootstrap-doctor/src/server/service.js
+- packages/studio-setup-doctor/src/server/service.js
     - codexBrowserLoginCommandArgs (function, export)
     - codexDeviceLoginCommandArgs (function, export)
     - codexLoginRepairs (function, export)
     - createService (function, helper)
-    - isBootstrapReady (function, helper)
+    - isStudioSetupReady (function, helper)
     - mysqlCapabilitySql (function, export)
     - mysqlRepair (function, export)
     - resolveStudioRoot (function, helper)
@@ -145,22 +145,22 @@ Root package: jskit-ai-studio
 - packages/main/src/server/MainServiceProvider.js
     - MainServiceProvider (class, component_or_class)
 
-- packages/target-app-doctor/package.descriptor.mjs
+- packages/adapter-setup-doctor/package.descriptor.mjs
     - default (default, default)
 
-- packages/target-app-doctor/src/server/actions.js
+- packages/adapter-setup-doctor/src/server/actions.js
     - ACTION_GET_STATUS (value, component_or_class)
     - featureActions (value, export)
 
-- packages/target-app-doctor/src/server/inputSchemas.js
+- packages/adapter-setup-doctor/src/server/inputSchemas.js
     - statusQueryInputValidator (value, export)
     - terminalInputValidator (value, export)
     - terminalStartInputValidator (value, export)
 
-- packages/target-app-doctor/src/server/registerRoutes.js
+- packages/adapter-setup-doctor/src/server/registerRoutes.js
     - registerRoutes (function, export)
 
-- packages/target-app-doctor/src/server/service.js
+- packages/adapter-setup-doctor/src/server/service.js
     - createService (function, helper)
     - ghRepoCreateRepair (function, export)
     - ghRepoCreateScript (function, export)
@@ -171,8 +171,8 @@ Root package: jskit-ai-studio
     - repoNameFromTargetRoot (function, export)
     - validateGitIdentityInputs (function, helper)
 
-- packages/target-app-doctor/src/server/TargetAppDoctorProvider.js
-    - TargetAppDoctorProvider (class, component_or_class)
+- packages/adapter-setup-doctor/src/server/AdapterSetupDoctorProvider.js
+    - AdapterSetupDoctorProvider (class, component_or_class)
 
 - server/lib/doctorStatusCache.js
     - createReadyStatusCache (function, helper)
@@ -255,10 +255,10 @@ Root package: jskit-ai-studio
 - src/components/ShellLayout.vue
     - default (default, default)
 
-- src/components/studio/AppBootupDoctorScreen.vue
+- src/components/studio/AdapterSetupDoctorScreen.vue
     - default (default, default)
 
-- src/components/studio/AppSetupDoctorScreen.vue
+- src/components/studio/ProjectSetupDoctorScreen.vue
     - default (default, default)
 
 - src/components/studio/AppTestTerminal.vue
@@ -267,7 +267,7 @@ Root package: jskit-ai-studio
 - src/components/studio/ArchivedIssueSessions.vue
     - default (default, default)
 
-- src/components/studio/BootupDoctorScreen.vue
+- src/components/studio/StudioSetupDoctorScreen.vue
     - default (default, default)
 
 - src/components/studio/CodexSessionTerminal.vue
@@ -357,9 +357,9 @@ Root package: jskit-ai-studio
     - APP_SETUP_ENDPOINT (value, component_or_class)
     - APP_SETUP_STREAM_ENDPOINT (value, component_or_class)
     - APP_SETUP_TERMINAL_ENDPOINT (value, component_or_class)
-    - BOOTSTRAP_ENDPOINT (value, component_or_class)
-    - BOOTSTRAP_STREAM_ENDPOINT (value, component_or_class)
-    - BOOTSTRAP_TERMINAL_ENDPOINT (value, component_or_class)
+    - STUDIO_SETUP_ENDPOINT (value, component_or_class)
+    - STUDIO_SETUP_STREAM_ENDPOINT (value, component_or_class)
+    - STUDIO_SETUP_TERMINAL_ENDPOINT (value, component_or_class)
     - closeCurrentAppTestTerminal (function, export)
     - closeIssueSessionAppTestTerminal (function, export)
     - closeIssueSessionCodexTerminal (function, export)
@@ -381,8 +381,8 @@ Root package: jskit-ai-studio
     - NPM_SCRIPTS_ENDPOINT (value, component_or_class)
     - npmScriptTerminalEndpoint (function, export)
     - npmScriptTerminalWebSocketUrl (function, export)
-    - readAppSetupStatus (function, helper)
-    - readBootstrapStatus (function, helper)
+    - readProjectSetupStatus (function, helper)
+    - readStudioSetupStatus (function, helper)
     - readCurrentApp (function, helper)
     - readIssueSession (function, helper)
     - readIssueSessionCodexTerminal (function, helper)
@@ -410,7 +410,7 @@ Root package: jskit-ai-studio
 - src/lib/terminalInput.js
     - terminalInputHasUserText (function, export)
 
-- src/pages/bootup-setup.vue
+- src/pages/setup.vue
     - default (default, default)
 
 - src/pages/home.vue

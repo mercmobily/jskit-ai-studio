@@ -35,7 +35,7 @@ export default Object.freeze({
         title: "App-local main lane",
         summary: "Keep @local/main focused on app composition and lightweight glue. Substantial server features should become dedicated packages instead of growing inside packages/main.",
         responsibilities: [
-          "packages/main server code: bootstraps app-local configuration and lightweight wiring only",
+          "packages/main server code: Studio Setup app-local configuration and lightweight wiring only",
           "substantial non-CRUD server features: scaffold a dedicated package with feature-server-generator",
           "packages/main: do not add service/controller/route/repository feature trees here"
         ],

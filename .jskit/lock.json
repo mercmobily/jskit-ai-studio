@@ -74,13 +74,13 @@
       "installedAt": "2026-05-10T07:17:23.225Z",
       "migrationSyncVersion": "0.1.0"
     },
-    "@local/bootstrap-doctor": {
-      "packageId": "@local/bootstrap-doctor",
+    "@local/studio-setup-doctor": {
+      "packageId": "@local/studio-setup-doctor",
       "version": "0.1.0",
       "source": {
         "type": "app-local-package",
-        "packagePath": "packages/bootstrap-doctor",
-        "descriptorPath": "packages/bootstrap-doctor/package.descriptor.mjs"
+        "packagePath": "packages/studio-setup-doctor",
+        "descriptorPath": "packages/studio-setup-doctor/package.descriptor.mjs"
       },
       "managed": {
         "packageJson": {
@@ -97,13 +97,13 @@
       "installedAt": "2026-05-10T12:01:12.284Z",
       "migrationSyncVersion": "0.1.0"
     },
-    "@local/target-app-doctor": {
-      "packageId": "@local/target-app-doctor",
+    "@local/adapter-setup-doctor": {
+      "packageId": "@local/adapter-setup-doctor",
       "version": "0.1.0",
       "source": {
         "type": "app-local-package",
-        "packagePath": "packages/target-app-doctor",
-        "descriptorPath": "packages/target-app-doctor/package.descriptor.mjs"
+        "packagePath": "packages/adapter-setup-doctor",
+        "descriptorPath": "packages/adapter-setup-doctor/package.descriptor.mjs"
       },
       "managed": {
         "packageJson": {
@@ -120,13 +120,13 @@
       "installedAt": "2026-05-11T01:48:06.407Z",
       "migrationSyncVersion": "0.1.0"
     },
-    "@local/app-setup-doctor": {
-      "packageId": "@local/app-setup-doctor",
+    "@local/project-setup-doctor": {
+      "packageId": "@local/project-setup-doctor",
       "version": "0.1.0",
       "source": {
         "type": "app-local-package",
-        "packagePath": "packages/app-setup-doctor",
-        "descriptorPath": "packages/app-setup-doctor/package.descriptor.mjs"
+        "packagePath": "packages/project-setup-doctor",
+        "descriptorPath": "packages/project-setup-doctor/package.descriptor.mjs"
       },
       "managed": {
         "packageJson": {

@@ -89,7 +89,7 @@ function createDoctorPluginToolkit({
   terminalEnv = {},
   terminalNamespace = ""
 } = {}) {
-  // Root helpers: adapters can work with the Studio checkout and the target app without rebuilding paths.
+  // Root helpers: adapters can work with the Studio checkout and the target project without rebuilding paths.
   function targetRootFor(context = {}) {
     return textValue(context.targetRoot || targetRoot);
   }
