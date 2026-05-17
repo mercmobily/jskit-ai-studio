@@ -23,6 +23,19 @@ addPlacement({
 });
 
 addPlacement({
+  id: "ai-studio.home.menu.configure",
+  target: "shell.secondary-nav",
+  kind: "link",
+  surfaces: ["home"],
+  order: 50,
+  props: {
+    label: "Configure",
+    to: "/home?configure=project",
+    exact: true
+  }
+});
+
+addPlacement({
   id: "jskit-ai-studio.home.menu.history",
   target: "shell.secondary-nav",
   kind: "link",

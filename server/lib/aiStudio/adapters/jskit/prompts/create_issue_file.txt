@@ -4,6 +4,8 @@ Session:
 - id: {{session.id}}
 - current step: {{session.currentStep}}
 - target root: {{session.targetRoot}}
+- worktree path: {{session.worktreePath}}
+- AI Studio session root: {{session.sessionRoot}}
 - artifacts root: {{session.artifactsRoot}}
 
 Known session metadata:
@@ -17,6 +19,8 @@ JSKIT prompt context:
 
 Action input:
 {{input.json}}
+
+Use npx jskit ... if JSKIT project inspection is useful. Inspect this AI Studio session through the AI Studio session root above.
 
 Write the reviewed issue title to:
 {{session.artifactsRoot}}/issue_title

@@ -90,7 +90,38 @@
           :steps="timelineSteps"
         >
           <template #current-step>
-            <div class="studio-ai-sessions__actions">
+            <form
+              v-if="issueRequestFormVisible"
+              class="studio-ai-sessions__issue-request"
+              @submit.prevent="sendIssueRequestPrompt"
+            >
+              <v-textarea
+                v-model="issueRequestText"
+                auto-grow
+                class="studio-ai-sessions__issue-request-input"
+                :disabled="commandBusy"
+                :error-messages="issueRequestError ? [issueRequestError] : []"
+                label="Issue request"
+                rows="5"
+                variant="outlined"
+              />
+
+              <div class="studio-ai-sessions__actions">
+                <v-btn
+                  color="primary"
+                  variant="flat"
+                  :disabled="!issueRequestCanSubmit"
+                  :loading="issueRequestSubmitting"
+                  :prepend-icon="mdiSend"
+                  :title="issueRequestSubmitTitle"
+                  type="submit"
+                >
+                  Send prompt
+                </v-btn>
+              </div>
+            </form>
+
+            <div v-else class="studio-ai-sessions__actions">
               <v-btn
                 v-for="action in currentActions"
                 :key="action.id"
@@ -159,6 +190,7 @@
           :prompt-injection-request-key="codexPromptInjectionKey"
           :prompt-override="codexPromptOverride"
           :session="selectedSession"
+          @busy-changed="handleCodexTerminalBusyChanged"
           @prompt-injected="handleCodexPromptInjected"
           @prompt-injection-failed="handleCodexPromptInjectionFailed"
           @session-update="handleCodexSessionUpdate"
@@ -237,7 +269,8 @@ import {
   mdiAlertCircleOutline,
   mdiArrowRight,
   mdiClose,
-  mdiPlus
+  mdiPlus,
+  mdiSend
 } from "@mdi/js";
 import AiStudioCommandTerminal from "@/components/studio/AiStudioCommandTerminal.vue";
 import AiStudioDraftEditorDialog from "@/components/studio/AiStudioDraftEditorDialog.vue";
@@ -289,10 +322,17 @@ const {
   goNext,
   handleCodexPromptInjected,
   handleCodexPromptInjectionFailed,
+  handleCodexTerminalBusyChanged,
   handleCodexSessionUpdate,
   handleCommandTerminalClosed,
   handleCommandTerminalFinished,
   handleCommandTerminalRunningChanged,
+  issueRequestCanSubmit,
+  issueRequestError,
+  issueRequestFormVisible,
+  issueRequestSubmitting,
+  issueRequestSubmitTitle,
+  issueRequestText,
   isSelectedSessionClosed,
   pageError,
   pageLoading,
@@ -300,6 +340,7 @@ const {
   runAction,
   runActionCommand,
   saveDraftEditor,
+  sendIssueRequestPrompt,
   selectSession,
   selectedSession,
   selectedSessionId,
@@ -418,6 +459,15 @@ const {
   display: flex;
   flex-wrap: wrap;
   gap: 0.45rem;
+}
+
+.studio-ai-sessions__issue-request {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.studio-ai-sessions__issue-request-input {
+  max-width: 100%;
 }
 
 .studio-ai-sessions__notice {

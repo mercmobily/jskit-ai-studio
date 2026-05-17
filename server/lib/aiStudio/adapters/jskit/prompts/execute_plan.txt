@@ -17,4 +17,4 @@ JSKIT prompt context:
 Action input:
 {{input.json}}
 
-Make the requested code changes directly in the workspace. Keep the work scoped to the session goal and report what changed when finished.
+Make the requested code edits directly in the workspace. Keep the work scoped to the session goal and report what you modified when finished.

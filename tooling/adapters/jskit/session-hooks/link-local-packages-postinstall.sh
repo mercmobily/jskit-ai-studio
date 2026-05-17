@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Development-only postinstall hook.
+# Development-only JSKIT adapter postinstall hook for dogfooding this app.
 # Normal installs no-op. Set JSKIT_DEVLINKS or an ignored .jskit/config
 # devel root to opt into local JSKIT package links, for example:
 #   JSKIT_DEVLINKS=/path/to/jskit-ai npm install
 #   JSKIT_DEVLINKS=1 JSKIT_AI_ROOT=/path/to/jskit-ai npm install
 #   printf '%s\n' /path/to/jskit-ai > .jskit/config/devel_jskit_ai_root
 
-SCRIPT_NAME="devel-link-local-packages-postinstall"
+SCRIPT_NAME="jskit-adapter-postinstall-devlinks"
 
 log() {
   printf '[%s] %s\n' "$SCRIPT_NAME" "$*" >&2
@@ -163,11 +163,15 @@ fi
 
 repo_root="$(cd "$repo_root" && pwd -P)"
 
-if [ "$session_context" -eq 1 ] && [ -f "$JSKIT_WORKTREE_ROOT/scripts/devel-provision-jskit-ai-studio-session.sh" ]; then
+if [ "$session_context" -eq 1 ]; then
+  session_provision_hook="$JSKIT_WORKTREE_ROOT/tooling/adapters/jskit/session-hooks/provision-session.sh"
+fi
+
+if [ "$session_context" -eq 1 ] && [ -f "$session_provision_hook" ]; then
   log "Provisioning JSKIT development sibling repos for this session."
   JSKIT_DEVLINKS="$repo_root" \
   JSKIT_AI_ROOT="$repo_root" \
-    bash "$JSKIT_WORKTREE_ROOT/scripts/devel-provision-jskit-ai-studio-session.sh"
+    bash "$session_provision_hook"
   exit 0
 fi
 

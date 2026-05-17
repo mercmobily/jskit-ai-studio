@@ -40,8 +40,8 @@ export default Object.freeze({
           "packages/main: do not add service/controller/route/repository feature trees here"
         ],
         examples: [
-          "jskit generate feature-server-generator scaffold booking-engine",
-          "jskit generate feature-server-generator scaffold availability-engine --mode orchestrator"
+          "npx jskit generate feature-server-generator scaffold booking-engine",
+          "npx jskit generate feature-server-generator scaffold availability-engine --mode orchestrator"
         ]
       }
     },

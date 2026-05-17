@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Development-only finalization guard for dogfooding jskit-ai-studio.
-# It protects editable sibling repos provisioned by
-# scripts/devel-provision-jskit-ai-studio-session.sh from being lost when a
-# JSKIT session is finalized and later cleaned up.
+# Development-only JSKIT adapter finalization guard for dogfooding this app.
+# It protects editable sibling repos provisioned by the JSKIT adapter session
+# hook from being lost when an AI Studio session is finalized and later cleaned up.
 
-SCRIPT_NAME="devel-check-sibling-repos-before-finalize"
+SCRIPT_NAME="jskit-adapter-finalization-guard"
 
 log() {
   printf '[%s] %s\n' "$SCRIPT_NAME" "$*" >&2
@@ -60,7 +59,7 @@ while IFS=$'\t' read -r name repo_path base_commit marker_path; do
     ahead_count="$(git -C "$repo_path" rev-list --count "$base_commit..HEAD")"
     if [ "$ahead_count" != "0" ] && [ ! -s "$marker_path" ]; then
       printf '[%s] Sibling %s has %s commit(s) after the session base that are not recorded as preserved.\n' "$SCRIPT_NAME" "$name" "$ahead_count" >&2
-      printf '[%s] Open/push a sibling PR, then write its URL to %s before finalizing this JSKIT session.\n' "$SCRIPT_NAME" "$marker_path" >&2
+      printf '[%s] Open/push a sibling PR, then write its URL to %s before finalizing this AI Studio session.\n' "$SCRIPT_NAME" "$marker_path" >&2
       failures=1
       continue
     fi

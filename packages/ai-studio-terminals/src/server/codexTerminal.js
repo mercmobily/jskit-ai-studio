@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { stat } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 
@@ -50,8 +51,24 @@ const CODEX_SESSION_REASONING_EFFORT = "xhigh";
 const MAX_OPEN_CODEX_TERMINALS = 3;
 const STUDIO_DAEMON_ID = crypto.randomUUID();
 
+async function directoryExists(filePath = "") {
+  try {
+    return (await stat(filePath)).isDirectory();
+  } catch (error) {
+    if (error?.code === "ENOENT" || error?.code === "ENOTDIR") {
+      return false;
+    }
+    throw error;
+  }
+}
+
 function terminalWorkdir(session = {}) {
-  const workdir = String(session.metadata?.worktree_path || session.worktree || session.targetRoot || "").trim();
+  const workdir = String(session.metadata?.worktree_path || session.worktree || "").trim();
+  return workdir ? path.resolve(workdir) : "";
+}
+
+function savedCodexWorkdir(session = {}) {
+  const workdir = String(session.metadata?.codex_workdir || "").trim();
   return workdir ? path.resolve(workdir) : "";
 }
 
@@ -105,17 +122,34 @@ function normalizeCodexPromptHandoffOutputStart(value) {
 
 function codexState(session = {}) {
   const metadata = session.metadata || {};
-  const codexThreadId = normalizeCodexThreadId(metadata.codex_thread_id);
+  const workdir = terminalWorkdir(session);
+  const codexThreadId = codexThreadIdForWorkdir(session, workdir);
   return {
+    codexWorkdir: workdir,
     codexPromptHandoffOutputStart: normalizeCodexPromptHandoffOutputStart(metadata.codex_prompt_handoff_output_start),
     codexPromptHandoffSignature: normalizeCodexPromptHandoffSignature(
       session.sessionId,
       metadata.codex_prompt_handoff_signature
     ),
     codexThreadId,
-    needsThreadCapture: !codexThreadId,
+    needsThreadCapture: Boolean(workdir && !codexThreadId),
     threadProbe: CODEX_THREAD_PROBE
   };
+}
+
+function codexThreadIdForWorkdir(session = {}, workdir = "") {
+  const codexThreadId = normalizeCodexThreadId(session.metadata?.codex_thread_id);
+  if (!codexThreadId) {
+    return "";
+  }
+
+  const normalizedWorkdir = workdir ? path.resolve(workdir) : terminalWorkdir(session);
+  const recordedWorkdir = savedCodexWorkdir(session);
+  if (!normalizedWorkdir || !recordedWorkdir || recordedWorkdir !== normalizedWorkdir) {
+    return "";
+  }
+
+  return codexThreadId;
 }
 
 function withCodexState(response = {}, session = {}) {
@@ -259,11 +293,37 @@ function createCodexTerminalController({ projectService } = {}) {
           };
         }
         const runtime = await projectService.createRuntime();
-        await runtime.getSession(sessionId);
-        await runtime.store.writeMetadataValue(sessionId, "codex_thread_id", codexThreadId);
+        const session = await runtime.getSession(sessionId);
+        const targetRoot = terminalTargetRoot(session, projectService);
+        const workdir = terminalWorkdir(session);
+        if (!targetRoot) {
+          return {
+            ok: false,
+            error: "AI Studio Codex target root is not available."
+          };
+        }
+        if (!workdir || !containerWorkspacePath(targetRoot, workdir)) {
+          return {
+            ok: false,
+            error: workdir
+              ? "AI Studio Codex workdir is outside the target root."
+              : "Create the session worktree before saving a Codex thread."
+          };
+        }
+        if (!await directoryExists(workdir)) {
+          return {
+            ok: false,
+            error: `Session worktree directory does not exist: ${workdir}`
+          };
+        }
+        await Promise.all([
+          runtime.store.writeMetadataValue(sessionId, "codex_thread_id", codexThreadId),
+          runtime.store.writeMetadataValue(sessionId, "codex_workdir", workdir)
+        ]);
         return {
           ok: true,
-          codexThreadId
+          codexThreadId,
+          codexWorkdir: workdir
         };
       });
     },
@@ -283,7 +343,15 @@ function createCodexTerminalController({ projectService } = {}) {
         if (!workdir || !containerWorkspacePath(targetRoot, workdir)) {
           return {
             ok: false,
-            error: "AI Studio Codex workdir is outside the target root."
+            error: workdir
+              ? "AI Studio Codex workdir is outside the target root."
+              : "Create the session worktree before starting Codex."
+          };
+        }
+        if (!await directoryExists(workdir)) {
+          return {
+            ok: false,
+            error: `Session worktree directory does not exist: ${workdir}`
           };
         }
         if (!(await dockerImageExists(STUDIO_BASE_TOOLCHAIN_IMAGE))) {
@@ -297,7 +365,7 @@ function createCodexTerminalController({ projectService } = {}) {
         const namespace = codexTerminalNamespace(sessionId);
         return withCodexState(startTerminalSession({
           args: ({ id }) => codexTerminalArgs({
-            codexThreadId: normalizeCodexThreadId(session.metadata?.codex_thread_id),
+            codexThreadId: codexThreadIdForWorkdir(session, workdir),
             containerName: codexContainerName({
               sessionId,
               terminalId: id
@@ -311,6 +379,11 @@ function createCodexTerminalController({ projectService } = {}) {
           commandPreview: ({ args }) => dockerCommand(args),
           cwd: targetRoot,
           maxRunning: MAX_OPEN_CODEX_TERMINALS,
+          metadata: {
+            sessionId,
+            targetRoot,
+            workdir
+          },
           namespace,
           namespaceLimitPrefix: CODEX_TERMINAL_NAMESPACE_PREFIX,
           onClose: async ({ id }) => {
@@ -320,7 +393,10 @@ function createCodexTerminalController({ projectService } = {}) {
             }));
             await cleanupCodexAttachments(targetRoot, sessionId);
           },
-          reuseRunning: true
+          reuseRunning: (terminalSession) => {
+            return terminalSession.metadata?.targetRoot === targetRoot &&
+              terminalSession.metadata?.workdir === workdir;
+          }
         }), session);
       });
     },

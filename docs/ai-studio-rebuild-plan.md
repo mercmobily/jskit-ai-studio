@@ -1,13 +1,13 @@
-# AI Studio Rebuild Plan
+# AI Studio Implementation Plan
 
-This plan describes the clean rebuild from JSKIT-specific Studio into a general `ai-studio` product.
+This plan describes the V0 implementation of the general `ai-studio` product.
 
-The past does not exist for this plan:
+V0 rules:
 
-- No legacy session support.
+- No alternate session support.
 - No compatibility wrappers.
 - No migration commands.
-- No old `.jskit/sessions` behavior in the new runtime.
+- Runtime session state lives in `.ai-studio`.
 - No hidden fallbacks to JSKIT-specific behavior.
 
 The new product is a checklist-driven AI coding studio. The core owns workflow state. Target adapters own project-specific reality.
@@ -39,7 +39,7 @@ This means:
 - Do not keep CLI placeholders in slices.
 - Do not describe CLI completion as an acceptance requirement.
 
-The runtime still needs a clean programmatic API because Studio must call it. That API is not a CLI. It is the internal contract between Studio UI, adapters, and durable session state. If a command line is ever added later, it must be designed as new work after this rebuild. The current rebuild must not carry command-line files, placeholders, acceptance criteria, or tests.
+The runtime still needs a clean programmatic API because Studio must call it. That API is not a CLI. It is the internal contract between Studio UI, adapters, and durable session state. If a command line is added later, it must be designed as separate work. The current implementation must not carry command-line files, placeholders, acceptance criteria, or tests.
 
 ## Hard Testing Rule
 
@@ -208,31 +208,31 @@ Action types:
 
 ## Phase 1: Product Reset
 
-Goal: Establish the new product boundary and naming without trying to preserve old runtime behavior.
+Goal: Establish the product boundary and naming.
 
 Instructions:
 
-- Create the new `ai-studio` runtime namespace.
-- Decide the new session root.
+- Create the `ai-studio` runtime namespace.
+- Decide the session root.
 - Use `.ai-studio/sessions/active/<session_id>/`.
 - Treat JSKIT as an adapter name, not the product name.
-- Remove JSKIT-specific assumptions from new core files.
+- Keep JSKIT-specific assumptions out of core files.
 - Do not add compatibility paths.
-- Do not read old session roots.
+- Session state is read from `.ai-studio`.
 
 Checklist:
 
-- [ ] New product name is `ai-studio` in new runtime code.
-- [ ] New sessions are stored under `.ai-studio/`.
-- [ ] New runtime code does not import JSKIT session runtime.
-- [ ] New runtime code does not reference old session roots.
+- [ ] Product name is `ai-studio` in runtime code.
+- [ ] Sessions are stored under `.ai-studio/`.
+- [ ] Runtime code uses AI Studio session APIs.
+- [ ] Runtime code uses `.ai-studio` session roots.
 - [ ] JSKIT appears only as an adapter concept.
-- [ ] Documentation states that new sessions are clean `ai-studio` sessions.
+- [ ] Documentation states that sessions are clean `ai-studio` sessions.
 
 Acceptance:
 
-- A new session can be created in `.ai-studio/sessions/active/`.
-- The new session has no dependency on old JSKIT session state.
+- A session can be created in `.ai-studio/sessions/active/`.
+- The session has no dependency on external session state.
 
 ## Phase 2: Session Store
 
@@ -1060,7 +1060,7 @@ Acceptance:
 
 ### SLICE 6: JSKIT Adapter, Setup Through Issue
 
-Goal: Implement the first real adapter enough to create a JSKIT session, set up the worktree, define an issue, create issue files, edit them, and create the GitHub issue.
+Goal: Implement the first real adapter enough to create an AI Studio session for a JSKIT project, set up the worktree, define an issue, create issue files, edit them, and create the GitHub issue.
 
 Instructions:
 
@@ -1160,14 +1160,14 @@ Acceptance:
 
 Goal: Make Studio a thin renderer over the new runtime session view.
 
-Hard-cutover rule for slices 9-13:
+Runtime wiring rule for slices 9-13:
 
-- Do not build old/new compatibility bridges.
-- Do not normalize new runtime data into legacy issue-session shapes.
-- Do not preserve old UI contracts just to keep the workflow usable mid-slice.
+- Do not build compatibility bridges.
+- Do not normalize runtime data into unrelated issue-session shapes.
+- Do not preserve unused UI contracts just to keep the workflow usable mid-slice.
 - The app must still compile and boot.
 - The Studio workflow may be incomplete until Slice 13 is finished.
-- Each slice should move the real UI/API boundary toward the new runtime directly.
+- Each slice should move the real UI/API boundary toward the runtime directly.
 
 Instructions:
 
@@ -1313,51 +1313,51 @@ Acceptance:
 
 - A competent developer can create a basic adapter without reading Studio UI code.
 
-### SLICE 14: Remove Legacy Studio Session Workflow
+### SLICE 14: Consolidate Studio Session Workflow
 
-Goal: Delete the old JSKIT-specific Studio session workflow after the new runtime is wired and proven.
+Goal: Keep one Studio session workflow after the runtime is wired and proven.
 
 Instructions:
 
-- Remove old issue-session workflow state code.
-- Remove old UI workflow inference.
-- Remove old prompt-generation paths.
-- Remove old deterministic command dispatch paths that duplicate runtime actions.
-- Remove old `.jskit/sessions` Studio workflow assumptions.
-- Remove dead endpoints and client API calls replaced by the new runtime.
+- Remove duplicate issue-session workflow state code.
+- Remove duplicate UI workflow inference.
+- Remove duplicate prompt-generation paths.
+- Remove deterministic command dispatch paths that duplicate runtime actions.
+- Remove non-`.ai-studio` Studio workflow assumptions.
+- Remove dead endpoints and client API calls replaced by the runtime.
 - Do not keep compatibility routes.
-- Do not keep legacy fallback behavior.
+- Do not keep fallback behavior that hides runtime errors.
 - Do not keep migration helpers.
-- Keep only code that is still used by the new runtime, adapters, terminal, or current Studio UI.
+- Keep only code that is used by the runtime, adapters, terminal, or current Studio UI.
 
 Checklist:
 
-- [ ] Old issue-session state machine code is deleted.
-- [ ] Old issue-session button mapping code is deleted.
-- [ ] Old issue-session prompt construction code is deleted.
-- [ ] Old issue-session command execution code is deleted.
-- [ ] Old `.jskit/sessions` Studio workflow reads are deleted.
+- [ ] Duplicate issue-session state machine code is deleted.
+- [ ] Duplicate issue-session button mapping code is deleted.
+- [ ] Duplicate issue-session prompt construction code is deleted.
+- [ ] Duplicate issue-session command execution code is deleted.
+- [ ] Non-`.ai-studio` Studio workflow reads are absent.
 - [ ] Replaced API routes are deleted.
 - [ ] Replaced client API helpers are deleted.
 - [ ] Dead view-model branches are deleted.
 - [ ] No compatibility routes remain.
-- [ ] No legacy fallback executor remains.
-- [ ] Fast tests cover the new runtime path that replaced deleted code.
+- [ ] No fallback executor remains.
+- [ ] Fast tests cover the runtime path.
 
 Acceptance:
 
-- Studio uses one workflow system: the new AI Studio runtime.
-- Searching the codebase does not reveal an alternate legacy issue-session workflow path.
+- Studio uses one workflow system: the AI Studio runtime.
+- Searching the codebase does not reveal an alternate issue-session workflow path.
 
 ### SLICE 15: Final Audit And Simplification
 
-Goal: Make the rebuilt Studio feel like one coherent product, with no leftover legacy vocabulary or unnecessary complexity.
+Goal: Make Studio feel like one coherent product, with clear vocabulary and no unnecessary complexity.
 
 Instructions:
 
 - Search for stale JSKIT product naming outside adapter-owned code.
-- Search for old Bootup, App Bootup, and App Setup concepts.
-- Search for old session roots, compatibility language, and fallback behavior.
+- Search for Bootup, App Bootup, and App Setup concepts.
+- Search for session-root assumptions, compatibility language, and fallback behavior.
 - Remove dead files, dead tests, and unused exports.
 - Simplify names that still describe implementation history instead of product behavior.
 - Keep the runtime, adapters, UI, and tests easy to read.
@@ -1367,19 +1367,19 @@ Instructions:
 Checklist:
 
 - [ ] No stale JSKIT product naming remains outside JSKIT adapter code.
-- [ ] No old session root behavior remains.
+- [ ] No non-`.ai-studio` session root behavior remains.
 - [ ] No compatibility or migration behavior remains.
 - [ ] No duplicate workflow state remains.
 - [ ] Bootup/App Bootup/App Setup concepts are either renamed clearly or deleted.
 - [ ] Dead files are deleted.
 - [ ] Unused exports are deleted.
-- [ ] Tests describe current behavior, not legacy history.
+- [ ] Tests describe current behavior.
 - [ ] Fast test suite passes.
 - [ ] Documentation matches the final architecture.
 
 Acceptance:
 
-- A new engineer can trace Studio from UI button to runtime action to adapter behavior to session file without encountering legacy workflow code.
+- A new engineer can trace Studio from UI button to runtime action to adapter behavior to session file.
 
 ## Implementation Order
 
@@ -1402,7 +1402,7 @@ Use the execution slices above as the primary plan. This shorter order is only a
 - [ ] Create Python adapter.
 - [ ] Create generic web adapter.
 - [ ] Write adapter author docs.
-- [ ] Delete legacy Studio session workflow.
+- [ ] Consolidate Studio session workflow.
 - [ ] Run final audit and simplification pass.
 
 ## Decisions To Make Early
@@ -1442,5 +1442,5 @@ The rebuild is successful when:
 - [ ] Prompts adapt to the target environment.
 - [ ] No npm assumptions exist outside web/JSKIT adapters.
 - [ ] No JSKIT assumptions exist in the core runtime.
-- [ ] No legacy issue-session workflow remains.
+- [ ] No duplicate issue-session workflow remains.
 - [ ] A developer can add a simple adapter without reading UI code.

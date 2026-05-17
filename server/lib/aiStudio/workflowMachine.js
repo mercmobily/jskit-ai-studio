@@ -171,6 +171,40 @@ function conditionMissing(reason) {
   };
 }
 
+function latestActionResult(session = {}, actionId = "") {
+  const normalizedActionId = normalizeText(actionId);
+  if (!normalizedActionId) {
+    return null;
+  }
+  const actionResults = Array.isArray(session.actionResults) ? session.actionResults : [];
+  return actionResults
+    .filter((result) => normalizeText(result.actionId) === normalizedActionId)
+    .slice()
+    .sort((left, right) => normalizeText(left.at).localeCompare(normalizeText(right.at)))
+    .at(-1) || null;
+}
+
+function actionInputConditionParts(conditionName = "") {
+  const separatorIndex = conditionName.indexOf(".");
+  if (separatorIndex <= 0 || separatorIndex === conditionName.length - 1) {
+    return {
+      actionId: "",
+      inputName: ""
+    };
+  }
+  return {
+    actionId: normalizeText(conditionName.slice(0, separatorIndex)),
+    inputName: normalizeText(conditionName.slice(separatorIndex + 1))
+  };
+}
+
+function conditionValueList(value = "") {
+  return normalizeText(value)
+    .split(",")
+    .map(normalizeText)
+    .filter(Boolean);
+}
+
 function enabledState() {
   return {
     disabledReason: "",
@@ -267,6 +301,25 @@ class WorkflowMachine {
       return artifact?.nonEmpty
         ? conditionMet()
         : conditionMissing(`Waiting for artifact: ${artifactName}.`);
+    }
+    if (name.startsWith("artifacts:")) {
+      const artifactNames = conditionValueList(name.slice("artifacts:".length));
+      const missingArtifact = artifactNames.find((artifactName) => {
+        return session.artifactReadiness?.[artifactName]?.nonEmpty !== true;
+      });
+      return artifactNames.length > 0 && !missingArtifact
+        ? conditionMet()
+        : conditionMissing(`Waiting for artifacts: ${artifactNames.join(", ")}.`);
+    }
+    if (name.startsWith("action-input:")) {
+      const {
+        actionId,
+        inputName
+      } = actionInputConditionParts(name.slice("action-input:".length));
+      const actionResult = latestActionResult(session, actionId);
+      return actionId && inputName && normalizeText(actionResult?.input?.[inputName])
+        ? conditionMet()
+        : conditionMissing(`Waiting for action input: ${actionId}.${inputName}.`);
     }
     if (name.startsWith("completed:")) {
       const stepId = name.slice("completed:".length);

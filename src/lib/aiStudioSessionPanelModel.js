@@ -47,6 +47,7 @@ function enrichAiStudioSessionForDisplay(session = null) {
     return null;
   }
   const metadata = session.metadata || {};
+  const worktree = metadata.worktree_path || metadata.worktree || session.worktree || "";
   return {
     ...session,
     branch: session.branch || metadata.branch || metadata.session_branch || "",
@@ -54,7 +55,8 @@ function enrichAiStudioSessionForDisplay(session = null) {
     issueUrl: session.issueUrl || metadata.issue_url || "",
     prUrl: session.prUrl || metadata.pr_url || "",
     pullRequestPath: session.pullRequestPath || metadata.pull_request_path || "",
-    worktree: session.worktree || metadata.worktree || metadata.worktree_path || ""
+    worktree,
+    worktreeReady: session.worktreeReady === true || Boolean(worktree)
   };
 }
 

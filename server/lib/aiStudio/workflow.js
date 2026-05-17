@@ -1,5 +1,15 @@
 import { deepFreeze } from "./deepFreeze.js";
 
+const CREATE_ISSUE_FILE_ACTION_ID = "create_issue_file";
+const ISSUE_BODY_ARTIFACT = "issue.md";
+const ISSUE_FILE_STEP_ID = "issue_file_created";
+const ISSUE_TITLE_ARTIFACT = "issue_title";
+const SEND_ISSUE_PROMPT_ACTION_ID = "send_issue_prompt";
+const ISSUE_FILES_READY_CONDITION = `artifacts:${ISSUE_TITLE_ARTIFACT},${ISSUE_BODY_ARTIFACT}`;
+const ISSUE_PROMPT_HAS_REQUEST_CONDITION = `action-input:${SEND_ISSUE_PROMPT_ACTION_ID}.issueRequest`;
+const ISSUE_TITLE_READY_CONDITION = `artifact:${ISSUE_TITLE_ARTIFACT}`;
+const ISSUE_BODY_READY_CONDITION = `artifact:${ISSUE_BODY_ARTIFACT}`;
+
 const DEFAULT_AI_STUDIO_WORKFLOW = deepFreeze({
   id: "default",
   steps: [
@@ -49,24 +59,28 @@ const DEFAULT_AI_STUDIO_WORKFLOW = deepFreeze({
     {
       actions: [
         {
-          id: "send_issue_prompt",
+          id: SEND_ISSUE_PROMPT_ACTION_ID,
           label: "Send prompt",
-          promptId: "send_issue_prompt",
+          promptId: SEND_ISSUE_PROMPT_ACTION_ID,
           type: "prompt"
         },
         {
-          id: "create_issue_file",
+          disabledReason: "Issue file already exists.",
+          disabledWhen: [ISSUE_FILES_READY_CONDITION],
+          enabledWhen: [ISSUE_PROMPT_HAS_REQUEST_CONDITION],
+          enabledWhenReason: "Send the issue prompt before creating the issue file.",
+          id: CREATE_ISSUE_FILE_ACTION_ID,
           label: "Create issue file",
-          promptId: "create_issue_file",
+          promptId: CREATE_ISSUE_FILE_ACTION_ID,
           type: "prompt"
         }
       ],
       description: "Define the issue and create the local issue files.",
-      id: "issue_file_created",
+      id: ISSUE_FILE_STEP_ID,
       label: "Define issue and create file",
       next: {
         disabledReason: "Create the issue file before continuing.",
-        enabledWhen: ["artifact:issue_title", "artifact:issue.md"]
+        enabledWhen: [ISSUE_TITLE_READY_CONDITION, ISSUE_BODY_READY_CONDITION]
       }
     },
     {
@@ -74,7 +88,7 @@ const DEFAULT_AI_STUDIO_WORKFLOW = deepFreeze({
         {
           disabledReason: "The GitHub issue already exists; edit it on GitHub instead.",
           disabledWhen: ["metadata:issue_url"],
-          enabledWhen: ["artifact:issue_title", "artifact:issue.md"],
+          enabledWhen: [ISSUE_TITLE_READY_CONDITION, ISSUE_BODY_READY_CONDITION],
           enabledWhenReason: "Create the issue file before editing.",
           id: "edit_issue",
           label: "Edit issue",
@@ -85,7 +99,7 @@ const DEFAULT_AI_STUDIO_WORKFLOW = deepFreeze({
           disabledReason: "Create the issue file before submitting it to GitHub.",
           disabledWhen: ["metadata:issue_url"],
           disabledWhenReason: "The GitHub issue already exists.",
-          enabledWhen: ["artifact:issue_title", "artifact:issue.md"],
+          enabledWhen: [ISSUE_TITLE_READY_CONDITION, ISSUE_BODY_READY_CONDITION],
           enabledWhenReason: "Create the issue file before submitting it to GitHub.",
           id: "create_issue_on_gh",
           label: "Create issue on GH",

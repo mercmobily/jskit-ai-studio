@@ -11,6 +11,7 @@
     </v-alert>
 
     <ProjectTypeGate
+      :configure-project="configureProject"
       @error="handleProjectTypeError"
       @missing="handleProjectTypeMissing"
       @ready="handleProjectTypeReady"
@@ -23,12 +24,15 @@
 </template>
 
 <script setup>
-import { onBeforeUnmount, ref } from "vue";
+import { computed, onBeforeUnmount, ref } from "vue";
+import { useRoute } from "vue-router";
 import AiStudioSessionPanel from "@/components/studio/AiStudioSessionPanel.vue";
 import ProjectTypeGate from "@/components/studio/ProjectTypeGate.vue";
 
 const pageError = ref("");
 const emit = defineEmits(["page-title-change"]);
+const route = useRoute();
+const configureProject = computed(() => route.query.configure === "project");
 
 function emitPageTitle(title = "") {
   emit("page-title-change", String(title || "").trim());

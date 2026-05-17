@@ -25,4 +25,4 @@ JSKIT prompt context:
 Action input:
 {{input.json}}
 
-Respond in the terminal with the work completed, files changed, checks run, and remaining blockers.
+Respond in the terminal with the work completed, files modified, checks run, and remaining blockers.

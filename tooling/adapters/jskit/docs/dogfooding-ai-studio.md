@@ -63,8 +63,8 @@ node_modules/@jskit-ai/jskit-cli
   -> /path/to/session/sibling-repos/jskit-ai/tooling/jskit-cli
 ```
 
-That matters because Studio is a UI over package-owned JSKIT behavior. When we
-change the session runtime, command handling, app doctor behavior, or package
+That matters because Studio is a UI over package-owned JSKIT behavior. When session
+runtime, command handling, app doctor behavior, or package
 metadata contracts, the authoritative code often lives in `jskit-ai`, not in
 the Studio repository. If Studio could only use published npm packages, the
 loop would be:
@@ -73,7 +73,7 @@ loop would be:
 2. Publish packages.
 3. Update Studio.
 4. Install.
-5. Discover the change is wrong.
+5. Discover the result is wrong.
 6. Repeat until morale becomes a build artifact.
 
 Devlinks remove that publish tax. The Studio worktree can run against editable
@@ -93,7 +93,7 @@ In a generated JSKIT app, `npm run devlinks` is deliberately thin:
 
 That is important. The behavior is not copied into every app as a shell script.
 It lives in the installed JSKIT CLI, so the rule can improve over time without
-asking old apps to carry around fossilized linking logic.
+asking apps to carry around project-local linking logic.
 
 The command does something very specific: it rewires already-installed
 `node_modules` entries so the app imports local JSKIT source packages instead
@@ -163,7 +163,7 @@ repos, not the developer's main checkout. So `node_modules/@jskit-ai/jskit-cli`
 does not point at "whatever happens to be open on the laptop"; it points at:
 
 ```text
-.jskit/sessions/active/<session_id>/sibling-repos/jskit-ai/tooling/jskit-cli
+.ai-studio/sessions/active/<session_id>/sibling-repos/jskit-ai/tooling/jskit-cli
 ```
 
 That is why devlinks and sibling repos are paired. Devlinks provide the package
@@ -174,13 +174,13 @@ are:
 
 - `.ai-studio/config/enable_recursive_ai_studio_opening`
 - `.ai-studio/config/recursive_ai_studio_local_jskit_ai_root`
-- `scripts/devel-link-local-packages-postinstall.sh`
-- `scripts/devel-provision-jskit-ai-studio-session.sh`
+- `tooling/adapters/jskit/session-hooks/link-local-packages-postinstall.sh`
+- `tooling/adapters/jskit/session-hooks/provision-session.sh`
 
 The postinstall hook does not force devlinks on normal users. A clean checkout
 with recursive opening disabled installs normal npm packages. If the Studio
 config screen enables recursive opening and points at a companion `jskit-ai`
-checkout, the hook can link local JSKIT packages. Inside JSKIT issue sessions,
+checkout, the hook can link local JSKIT packages. Inside AI Studio sessions,
 the provisioning script takes over and turns that local source into
 session-owned sibling clones.
 
@@ -212,13 +212,13 @@ Sibling repos fix the ownership boundary.
 For a session, Studio provisions sibling clones under:
 
 ```text
-.jskit/sessions/active/<session_id>/sibling-repos/<repo-name>
+.ai-studio/sessions/active/<session_id>/sibling-repos/<repo-name>
 ```
 
 For example:
 
 ```text
-.jskit/sessions/active/2026-05-15_14-12-52/
+.ai-studio/sessions/active/2026-05-15_14-12-52/
   worktree/
   sibling-repos/
     jskit-ai/
@@ -236,7 +236,7 @@ without writing into the developer's main checkout.
 
 The session records the sibling repo base commits in `manifest.tsv`, switches
 each sibling clone to a session branch, and finalization can guard against dirty
-sibling repos. If the sibling repo changed, the user must handle it deliberately,
+sibling repos. If the sibling repo has modifications, the user must handle it deliberately,
 usually by asking Codex to prepare the sibling PR too. The important bit is that
 the workflow refuses to silently lose the work.
 
@@ -258,12 +258,12 @@ The solution is a development-only provisioning hook:
 ```json
 {
   "scripts": {
-    "jskit:provision-session": "bash scripts/devel-provision-jskit-ai-studio-session.sh"
+    "jskit:provision-session": "bash tooling/adapters/jskit/session-hooks/provision-session.sh"
   }
 }
 ```
 
-The JSKIT session runtime invokes that hook after the session worktree exists
+The AI Studio session runtime invokes that hook after the session worktree exists
 and dependencies are installed or adopted. The script then:
 
 1. Reads Studio's recursive-opening config.
@@ -271,7 +271,7 @@ and dependencies are installed or adopted. The script then:
 3. Clones configured sibling repos into the session.
 4. Creates session branches in those siblings.
 5. Writes session-local companion config for those sibling repos.
-6. Runs `jskit app link-local-packages` so `node_modules` points at the
+6. Runs `npx jskit app link-local-packages` so `node_modules` points at the
    session-owned package sources.
 
 The behavior is marked clearly as development-only. Normal apps do not need it,

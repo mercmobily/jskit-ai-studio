@@ -8,7 +8,7 @@
 - First-run rule: Studio gates readiness behind the Bootup/Setup flow at `/bootup-setup`. The default tab is `bootup`; missing or unknown `tab` query values normalize to `bootup`.
 - Root rule: the controlled project root is the launcher/invocation directory, not necessarily the Studio implementation directory. If the Studio executable has to start the server from the Studio app root, the launcher must preserve the original project root in `JSKIT_STUDIO_TARGET_ROOT`.
 - Target-readiness rule: after Bootstrap Doctor passes and before any app inspection, Studio runs Target App Doctor in `/bootup-setup?tab=app-bootup` to prove target identity, filesystem access, Git state, and GitHub control capability without reading app metadata.
-- App-setup rule: after Target App Doctor passes and before `/home`, Studio runs App Setup Doctor in `/bootup-setup?tab=app-setup` to make the target root a doctor-ready JSKIT app without duplicating `jskit app verify`.
+- App-setup rule: after Target App Doctor passes and before `/home`, Studio runs App Setup Doctor in `/bootup-setup?tab=app-setup` to make the target root a doctor-ready JSKIT app without duplicating `npx jskit app verify`.
 
 ## Platform Choices
 
@@ -37,14 +37,14 @@
 | --- | --- | --- | --- |
 | BootstrapEnvironment | Machine-level runtime readiness for Studio | public | Checks Docker/runtime ability to provide MySQL capability, Node 22, npm, git, GH auth, and Codex auth before project work begins. |
 | TargetAppReadiness | Pre-inspection Git/GitHub readiness for the target root | public | Derived from target path, Git, and GitHub CLI checks; blocks app inspection and edits until ready or repaired. |
-| AppSetupReadiness | Sequential setup state for the target app | public | Derived from filesystem, Git/GitHub remote state, JSKIT scaffold markers, local dependencies, runtime service needs, and `jskit app verify`. |
+| AppSetupReadiness | Sequential setup state for the target app | public | Derived from filesystem, Git/GitHub remote state, JSKIT scaffold markers, local dependencies, runtime service needs, and `npx jskit app verify`. |
 | CurrentApp | Runtime snapshot of the target project root | public | Derived from filesystem and git on request; not persisted. The target root comes from the invocation directory or `JSKIT_STUDIO_TARGET_ROOT`, not from a stored project list. |
-| IssueSession | JSKIT issue-session runtime state for the current target app | public | Derived from `.jskit/sessions` and JSKIT session runtime APIs; not a Studio database table. Active sessions stay on `/home`; completed and abandoned archive views are read through Current App APIs. |
+| IssueSession | AI Studio session runtime state for the current JSKIT target app | public | Derived from `.ai-studio/sessions` and AI Studio runtime APIs; not a database table. Active sessions stay on `/home`; completed and abandoned archive views are read through Current App APIs. JSKIT framework work uses `npx jskit ...` from the repository. AI Studio session state is inspected through `.ai-studio`. |
 | CurrentAppNpmScripts | Target `package.json` scripts plus operator shortcuts | public | Derived from the target app `package.json`. Starred script overrides are target-root config in `.jskit/config/starred_npm_scripts`, not database or CRUD-owned data. |
 
 ## Route And Screen Plan
 
-- Home/global routes: `/bootup-setup` is the single Bootup/Setup route and renders three query-addressable tabs: `?tab=bootup`, `?tab=app-bootup`, and `?tab=app-setup`. `/home` is the active issue-session workspace for the current target app. The legacy `/bootup`, `/app-bootup`, and `/app-setup` file routes are intentionally removed and are not compatibility redirects.
+- Home/global routes: `/bootup-setup` is the single Bootup/Setup route and renders three query-addressable tabs: `?tab=bootup`, `?tab=app-bootup`, and `?tab=app-setup`. `/home` is the active issue-session workspace for the current target app.
 - Active session title behavior: `/home` shows the selected active `IssueSession` title in the shell app bar top-left area so it does not consume page content height. The title is unboxed and is not duplicated as a Session details fact. When no active title is available, the shell falls back to the normal `Sessions` label.
 - NPM Scripts route: `/home/npm-scripts` is a JSKIT UI-generator page reached from `shell.secondary-nav` as `NPM Scripts`. It is separate from `/home` so script shortcuts do not dominate the issue-session workspace.
 - Session history route: `/home/history` is the single archive screen for issue sessions. It is reached from `shell.secondary-nav` as `Session History`, uses Vuetify tabs for `Completed` and `Abandoned`, stores the selected tab in `?tab=completed|abandoned`, and defaults missing or invalid tab state to `completed`.
@@ -66,10 +66,10 @@
 ## Implementation Notes
 
 - CRUDs to scaffold: none.
-- Non-CRUD pages to scaffold: use the JSKIT UI generator for new app pages when it fits; `/home/npm-scripts` is a generated UI page customized around `NpmScriptsPanel`, and `/home/history` is a generated-style Vuetify page customized for Session History tabs. The `/bootup-setup` route is a manual refactor of existing doctor pages because it preserves existing gate logic, removes old routes, and owns custom tab query behavior.
+- Non-CRUD pages to scaffold: use the JSKIT UI generator for new app pages when it fits; `/home/npm-scripts` is a generated UI page customized around `NpmScriptsPanel`, and `/home/history` is a generated-style Vuetify page customized for Session History tabs. The `/bootup-setup` route owns doctor tabs and gate query behavior.
 - Custom code areas: bootstrap runtime checks, target app Git/GitHub readiness checks, app setup orchestration checks, current-app server inspection service, issue-session UI, the Bootup/Setup tab host, and gated home page UI.
 - Bootup/Setup UI ownership: `src/pages/bootup-setup.vue` owns the single `ShellLayout` wrapper and lazy-mounts one active doctor screen at a time. The reusable doctor screens live under `src/components/studio/` and must not include their own `ShellLayout`.
-- Gate route state: `resolveStudioGate()` stores the shared route `/bootup-setup` plus a `tab` value (`bootup`, `app-bootup`, or `app-setup`) instead of storing old route strings.
+- Gate route state: `resolveStudioGate()` stores the shared route `/bootup-setup` plus a `tab` value (`bootup`, `app-bootup`, or `app-setup`).
 - Issue-session archives: `ArchivedIssueSessions` owns archive list loading, empty, error, refresh, and card-detail states. The Session History page reuses it with `archive=completed|abandoned`, hides archive-specific title/description copy inside tabs, and places one top-level Refresh action in the tab controls so the archive content does not gain an extra action-only header row.
 - Active issue-session naming: derive display titles through `issueSessionDisplayTitle(session)` using trimmed `session.issueTitle`, then the first meaningful line from `session.issueText`, then `Session <shortIssueSessionId(session.sessionId)>`. `IssueSessionPanel` emits the selected title upward; `/home/index.vue` forwards it; `/home.vue` owns shell app-bar rendering and clears it when leaving `/home` or when the current app/session is unavailable.
 - Current-app archive API: completed and abandoned archive lists use `GET /api/studio/current-app/issue-sessions?archive=<completed|abandoned>`. This is app runtime data, not CRUD-owned persistence.
@@ -104,7 +104,7 @@
 ## App Setup Doctor Plan
 
 - Scope: sequential target setup after machine and target-control gates are ready. This stage may read project setup files because it is explicitly about making the current directory app-ready.
-- Authority boundary: Studio does not duplicate JSKIT internals. It only checks the safe outer state needed to run `jskit app verify`; the final JSKIT Doctor stage owns app correctness.
+- Authority boundary: Studio does not duplicate JSKIT internals. It only checks the safe outer state needed to run `npx jskit app verify`; the final JSKIT Doctor stage owns app correctness.
 - Admissible starting states: an empty directory with no `.git`, or an existing coherent Git repository. A directory with files but no `.git` is a hard stop.
 - Hard stops: linked worktrees/submodule-style `.git` files, bare repos, detached/unknown branches, non-GitHub `origin`, inaccessible GitHub repositories, local/remote history divergence, remote content not mirrored locally, malformed `.jskit/lock.json`, and existing non-JSKIT files where the generator would overwrite user-owned work.
 - Sequential stages: Directory admissibility, Git ready, Remote ready, Remote/local sync, Initial JSKIT scaffold, Dependencies runnable, Runtime services, JSKIT doctor, Ready.
@@ -130,7 +130,7 @@
 ## Verification
 
 - Commands to run: `npm run lint`, `npm test`, `npm run test:client`, `npm run build`, targeted Playwright for Current App UI, `npx --no-install jskit app verify-ui ...`.
-- Playwright coverage plan: load `/bootup-setup`, `/bootup-setup?tab=bootup`, `/bootup-setup?tab=app-bootup`, `/bootup-setup?tab=app-setup`, `/home`, `/home/history`, and `/home/npm-scripts` at compact, medium, and expanded widths where applicable; assert tab clicks update URL query state, ready continue actions move through the tab flow, old bootup routes do not redirect to `/bootup-setup`, npm script stars persist/reset, npm script terminal opens fullscreen with only one visible instance, and no horizontal overflow occurs.
+- Playwright coverage plan: load `/bootup-setup`, `/bootup-setup?tab=bootup`, `/bootup-setup?tab=app-bootup`, `/bootup-setup?tab=app-setup`, `/home`, `/home/history`, and `/home/npm-scripts` at compact, medium, and expanded widths where applicable; assert tab clicks update URL query state, ready continue actions move through the tab flow, npm script stars persist/reset, npm script terminal opens fullscreen with only one visible instance, and no horizontal overflow occurs.
 - Test auth strategy: none; V0 has no auth.
 - UI review expectations: dense local operator UI with clear status, scripts, packages, surfaces, runtime needs, and git status.
 - Known open questions: Podman support, ephemeral startup token, command runner, persistent job logs, and ready-state UI verification after a real managed bootstrap are later chunks.

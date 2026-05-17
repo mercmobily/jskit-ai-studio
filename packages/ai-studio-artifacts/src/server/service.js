@@ -3,27 +3,38 @@ import {
   aiStudioResult,
   normalizePlainObject
 } from "../../../../server/lib/aiStudio/serverResponses.js";
+import {
+  deepFreeze
+} from "../../../../server/lib/aiStudio/deepFreeze.js";
 
-const EDITABLE_ARTIFACTS = Object.freeze({
-  "issue.md": Object.freeze({
-    blockedMetadata: "issue_url",
+const EDIT_ISSUE_ACTION_ID = "edit_issue";
+const EDIT_PULL_REQUEST_ACTION_ID = "edit_pr";
+const ISSUE_BODY_ARTIFACT = "issue.md";
+const ISSUE_TITLE_ARTIFACT = "issue_title";
+const ISSUE_URL_METADATA = "issue_url";
+const PULL_REQUEST_ARTIFACT = "pull_request.md";
+const PULL_REQUEST_URL_METADATA = "pr_url";
+
+const EDITABLE_ARTIFACTS = deepFreeze({
+  [ISSUE_BODY_ARTIFACT]: {
+    blockedMetadata: ISSUE_URL_METADATA,
     blockedMessage: "The GitHub issue already exists; edit it on GitHub instead.",
-    editorActionId: "edit_issue",
+    editorActionId: EDIT_ISSUE_ACTION_ID,
     requiredMessage: "Issue body is required."
-  }),
-  issue_title: Object.freeze({
-    blockedMetadata: "issue_url",
+  },
+  [ISSUE_TITLE_ARTIFACT]: {
+    blockedMetadata: ISSUE_URL_METADATA,
     blockedMessage: "The GitHub issue already exists; edit it on GitHub instead.",
-    editorActionId: "edit_issue",
-    metadataName: "issue_title",
+    editorActionId: EDIT_ISSUE_ACTION_ID,
+    metadataName: ISSUE_TITLE_ARTIFACT,
     requiredMessage: "Issue title is required."
-  }),
-  "pull_request.md": Object.freeze({
-    blockedMetadata: "pr_url",
+  },
+  [PULL_REQUEST_ARTIFACT]: {
+    blockedMetadata: PULL_REQUEST_URL_METADATA,
     blockedMessage: "The GitHub pull request already exists; edit it on GitHub instead.",
-    editorActionId: "edit_pr",
+    editorActionId: EDIT_PULL_REQUEST_ACTION_ID,
     requiredMessage: "Pull request body is required."
-  })
+  }
 });
 
 function artifactResult(operation) {

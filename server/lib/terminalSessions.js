@@ -132,8 +132,11 @@ function startTerminalSession({
 }) {
   const sessions = sessionsForNamespace(namespace);
   const id = crypto.randomUUID();
+  const canReuseRunningSession = typeof reuseRunning === "function"
+    ? reuseRunning
+    : () => Boolean(reuseRunning);
   const existingSession = reuseRunning
-    ? [...sessions.values()].find((session) => isRunningSession(session))
+    ? [...sessions.values()].find((session) => isRunningSession(session) && canReuseRunningSession(session))
     : null;
   if (existingSession) {
     return terminalSessionResponse(existingSession);

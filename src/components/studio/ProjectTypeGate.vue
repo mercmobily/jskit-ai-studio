@@ -64,6 +64,12 @@ import {
 } from "@/lib/studioHttp.js";
 
 const emit = defineEmits(["ready", "missing", "error"]);
+const props = defineProps({
+  configureProject: {
+    default: false,
+    type: Boolean
+  }
+});
 
 const savingConfig = ref(false);
 const savingType = ref("");
@@ -180,7 +186,7 @@ const needsProjectType = computed(() => targetProject.value && projectType.value
 const needsProjectConfig = computed(() => {
   return targetProject.value &&
     projectType.value?.ready === true &&
-    projectConfig.value?.ready !== true;
+    (props.configureProject || projectConfig.value?.ready !== true);
 });
 const loading = computed(() => Boolean(
   targetProjectView.isLoading ||
@@ -245,11 +251,15 @@ async function saveProjectConfig(values) {
   }
 }
 
-watch(targetProject, (project) => {
+watch([targetProject, () => props.configureProject], ([project, configureProject]) => {
   if (!project) {
     return;
   }
-  if (project.projectType?.ready === true && project.projectConfig?.ready === true) {
+  if (
+    project.projectType?.ready === true &&
+    project.projectConfig?.ready === true &&
+    configureProject !== true
+  ) {
     emit("ready", project);
     return;
   }

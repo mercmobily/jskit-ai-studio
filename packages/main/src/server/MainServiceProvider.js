@@ -13,7 +13,7 @@ class MainServiceProvider {
 
   // Keep packages/main as app glue only.
   // When backend behavior becomes substantial, scaffold a dedicated package:
-  //   jskit generate feature-server-generator scaffold <feature-name>
+  //   npx jskit generate feature-server-generator scaffold <feature-name>
   boot() {}
 }
 

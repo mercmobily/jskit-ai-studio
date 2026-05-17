@@ -147,9 +147,9 @@ Current status:
 
 - Do not implement these config values yet.
 - Do not add a generic adapter config framework yet.
-- Do not change scaffold behavior yet.
-- Do not change setup doctor behavior yet.
+- Leave scaffold behavior untouched for now.
+- Leave setup doctor behavior untouched for now.
 - Do not add Postgres support yet.
-- Do not change JSKIT prompts yet.
+- Leave JSKIT prompts untouched for now.
 
 This document is only a map for future JSKIT adapter strengthening.

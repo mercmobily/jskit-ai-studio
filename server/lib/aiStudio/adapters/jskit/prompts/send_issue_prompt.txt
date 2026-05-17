@@ -4,6 +4,12 @@ Session:
 - id: {{session.id}}
 - current step: {{session.currentStep}}
 - target root: {{session.targetRoot}}
+- worktree path: {{session.worktreePath}}
+- AI Studio session root: {{session.sessionRoot}}
+- artifacts root: {{session.artifactsRoot}}
+
+Known session metadata:
+{{session.metadata.json}}
 
 JSKIT project facts:
 {{adapter.facts.json}}
@@ -13,5 +19,9 @@ JSKIT prompt context:
 
 Action input:
 {{input.json}}
+
+The user's issue request is the issueRequest value in Action input.
+
+Use npx jskit ... if JSKIT project inspection is useful. Inspect this AI Studio session through the AI Studio session root above.
 
 Clarify the requested issue until it is scoped enough to create a concise issue title and issue body. Do not modify files.

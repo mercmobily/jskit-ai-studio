@@ -4,8 +4,19 @@ import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
 import { useList } from "@jskit-ai/users-web/client/composables/useList";
 import { usePaths } from "@jskit-ai/users-web/client/composables/usePaths";
 import { useAiStudioCodexCommands } from "@/composables/useAiStudioCodexCommands.js";
+import {
+  ISSUE_BODY_ARTIFACT,
+  ISSUE_TITLE_ARTIFACT,
+  PULL_REQUEST_ARTIFACT
+} from "@/lib/aiStudioArtifactNames.js";
+import {
+  useAiStudioIssueFileStep
+} from "@/composables/useAiStudioIssueFileStep.js";
 import { useAiStudioSessionArtifacts } from "@/composables/useAiStudioSessionArtifacts.js";
 import { useStoredSelection } from "@/composables/useStoredSelection.js";
+import {
+  latestAiStudioActionResult
+} from "@/lib/aiStudioActionResults.js";
 import { writeClipboardText } from "@/lib/clipboard.js";
 import {
   isClosedAiStudioSession,
@@ -35,10 +46,6 @@ import {
   shortAiStudioSessionId as shortSessionId,
   visibleAiStudioSessions
 } from "@/lib/aiStudioSessionPanelModel.js";
-const ISSUE_BODY_ARTIFACT = "issue.md";
-const ISSUE_TITLE_ARTIFACT = "issue_title";
-const PULL_REQUEST_ARTIFACT = "pull_request.md";
-
 function resolveResponseErrorMessage(response = {}, fallback = "AI Studio request failed.") {
   return String(response?.errors?.[0]?.message || response?.error || fallback);
 }
@@ -60,6 +67,7 @@ function useAiStudioSessions({
   const copyStatus = ref("");
   const codexPromptInjectionKey = ref("");
   const codexPromptOverride = ref("");
+  const codexTerminalBusy = ref(false);
   const commandTerminalAction = ref(null);
   const commandTerminalRunning = ref(false);
   const commandTerminalStartKey = ref("");
@@ -131,6 +139,7 @@ function useAiStudioSessions({
       const promptHandoff = aiStudioPromptHandoffFromSession(response);
       if (promptHandoff?.prompt) {
         codexPromptOverride.value = promptHandoff.prompt;
+        codexTerminalBusy.value = true;
         codexPromptInjectionKey.value = `${context.sessionId}:${context.actionId}:${Date.now()}`;
         await refreshSessionData();
         return;
@@ -206,7 +215,7 @@ function useAiStudioSessions({
     return sessions.value.find((session) => session.sessionId === selectedSessionId.value) || null;
   });
   const selectedSession = computed(() => enrichAiStudioSessionForDisplay(selectedListSession.value));
-  const currentActions = computed(() => {
+  const baseCurrentActions = computed(() => {
     return Array.isArray(selectedSession.value?.actions)
       ? selectedSession.value.actions.filter((action) => action.visible !== false)
       : [];
@@ -218,10 +227,24 @@ function useAiStudioSessions({
     runActionCommand.isRunning ||
     advanceCommand.isRunning ||
     abandonCommand.isRunning ||
+    codexTerminalBusy.value ||
     commandTerminalRunning.value ||
     draftEditorLoading.value ||
     draftEditorSaving.value
   ));
+  const issueFileStep = useAiStudioIssueFileStep({
+    activeActionId,
+    clearCopyStatus() {
+      copyStatus.value = "";
+    },
+    commandBusy,
+    runActionCommand,
+    selectedSession,
+    selectedSessionId
+  });
+  const currentActions = computed(() => {
+    return issueFileStep.visibleActions(baseCurrentActions.value);
+  });
   const commandTerminalVisible = computed(() => Boolean(commandTerminalAction.value || commandTerminalRunning.value));
   const pageLoading = computed(() => Boolean(sessionList.isLoading));
   const pageError = computed(() => {
@@ -273,6 +296,9 @@ function useAiStudioSessions({
     return "info";
   });
   const currentStepDisabledReason = computed(() => {
+    if (issueFileStep.formVisible.value) {
+      return "";
+    }
     return resolveCurrentStepDisabledReason(currentActions.value, currentNext.value);
   });
 
@@ -293,31 +319,6 @@ function useAiStudioSessions({
       response.next?.enabled === true;
   }
 
-  function latestResultForAction(actionId = "", {
-    since = 0
-  } = {}) {
-    const normalizedActionId = String(actionId || "");
-    if (!normalizedActionId) {
-      return null;
-    }
-    const earliestTime = Number(since || 0);
-    const actionResults = Array.isArray(selectedSession.value?.actionResults)
-      ? selectedSession.value.actionResults
-      : [];
-    return actionResults
-      .filter((result) => result.actionId === normalizedActionId)
-      .filter((result) => {
-        if (!earliestTime) {
-          return true;
-        }
-        const resultTime = new Date(result.at || "").getTime();
-        return Number.isFinite(resultTime) && resultTime >= earliestTime;
-      })
-      .slice()
-      .sort((left, right) => String(left.at || "").localeCompare(String(right.at || "")))
-      .at(-1) || null;
-  }
-
   async function refreshAfterCommandTerminalSettled({
     actionId = "",
     exitCode = null
@@ -327,7 +328,7 @@ function useAiStudioSessions({
     await refreshSessionData();
     await nextTick();
 
-    const result = latestResultForAction(actionId, {
+    const result = latestAiStudioActionResult(selectedSession.value, actionId, {
       since: pendingCommandStartedAt.value
     });
     const commandSucceeded = Number(exitCode) === 0 || result?.status === "completed";
@@ -355,6 +356,7 @@ function useAiStudioSessions({
     abandonDialogSessionTitle.value = "";
     codexPromptInjectionKey.value = "";
     codexPromptOverride.value = "";
+    codexTerminalBusy.value = false;
     clearCommandTerminal();
     draftEditorOpen.value = false;
     pendingCommandAdvanceOnSuccess.value = false;
@@ -384,6 +386,7 @@ function useAiStudioSessions({
       await runActionCommand.run({
         actionId: action.id,
         advanceOnSuccess: action.advanceOnSuccess === true,
+        input: issueFileStep.inputForAction(action),
         sessionId: selectedSessionId.value
       });
     } finally {
@@ -515,6 +518,7 @@ function useAiStudioSessions({
 
   async function handleCodexPromptInjected(event = {}) {
     const sessionId = String(event.sessionId || selectedSessionId.value || "");
+    codexTerminalBusy.value = true;
     if (sessionId) {
       await codexCommands.savePromptHandoff(sessionId, {
         outputStart: Number(event.outputStart || 0),
@@ -525,10 +529,24 @@ function useAiStudioSessions({
   }
 
   function handleCodexPromptInjectionFailed(event = {}) {
+    codexTerminalBusy.value = false;
     copyStatus.value = String(event.error || "Prompt injection failed.");
   }
 
-  async function handleCodexSessionUpdate() {
+  function handleCodexTerminalBusyChanged(event = {}) {
+    if (event.sessionId && event.sessionId !== selectedSessionId.value) {
+      return;
+    }
+    codexTerminalBusy.value = event.busy === true;
+  }
+
+  async function handleCodexSessionUpdate(event = {}) {
+    if (event.sessionId && event.sessionId !== selectedSessionId.value) {
+      return;
+    }
+    if (event.codexTerminalStatus === "exited") {
+      codexTerminalBusy.value = false;
+    }
     await refreshSessionData();
   }
 
@@ -588,10 +606,17 @@ function useAiStudioSessions({
     goNext,
     handleCodexPromptInjected,
     handleCodexPromptInjectionFailed,
+    handleCodexTerminalBusyChanged,
     handleCodexSessionUpdate,
     handleCommandTerminalClosed,
     handleCommandTerminalFinished,
     handleCommandTerminalRunningChanged,
+    issueRequestCanSubmit: issueFileStep.canSubmit,
+    issueRequestError: issueFileStep.requestError,
+    issueRequestFormVisible: issueFileStep.formVisible,
+    issueRequestSubmitting: issueFileStep.submitting,
+    issueRequestSubmitTitle: issueFileStep.submitTitle,
+    issueRequestText: issueFileStep.requestText,
     isSelectedSessionClosed,
     pageError,
     pageLoading,
@@ -599,6 +624,7 @@ function useAiStudioSessions({
     runAction,
     runActionCommand,
     saveDraftEditor,
+    sendIssueRequestPrompt: issueFileStep.sendPrompt,
     selectSession,
     selectedSession,
     selectedSessionId,

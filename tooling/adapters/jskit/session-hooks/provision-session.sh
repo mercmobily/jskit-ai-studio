@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Development-only JSKIT session provisioning for dogfooding jskit-ai-studio.
-# The JSKIT runtime only invokes this because package.json opts in with
-# jskit:provision-session. Production app behavior must not depend on it.
+# Development-only JSKIT adapter session provisioning for dogfooding this app.
+# The AI Studio session runtime invokes this because package.json opts in with
+# jskit:provision-session. Generic AI Studio behavior must not depend on it.
 #
 # Optional sibling repo config:
 #   JSKIT_AI_ROOT=/absolute/path/to/jskit-ai
@@ -12,9 +12,9 @@ set -euo pipefail
 #   .jskit/config/devel_sibling_repos
 #   .jskit/config/devel_sibling_roots/<repo-name>
 #
-# Sibling changes are guarded later by scripts/devel-check-sibling-repos-before-finalize.sh.
+# Sibling changes are guarded later by this directory's finalization hook.
 
-SCRIPT_NAME="devel-provision-jskit-ai-studio-session"
+SCRIPT_NAME="jskit-adapter-provision-session"
 
 log() {
   printf '[%s] %s\n' "$SCRIPT_NAME" "$*" >&2

@@ -236,7 +236,7 @@ function gitCheckpointScript() {
     "export GIT_TERMINAL_PROMPT=0",
     "set -x",
     "as_host git -c safe.directory=/workspace status --short",
-    "if ! as_host git -c safe.directory=/workspace rev-parse --verify HEAD >/dev/null 2>&1; then if [ -z \"$(as_host git -c safe.directory=/workspace status --porcelain=v1)\" ]; then echo 'No files to checkpoint and no commits exist.'; exit 1; fi; as_host git -c safe.directory=/workspace add .; as_host git -c safe.directory=/workspace commit -m \"$AI_STUDIO_COMMIT_MESSAGE\"; elif [ -n \"$(as_host git -c safe.directory=/workspace status --porcelain=v1)\" ]; then as_host git -c safe.directory=/workspace add .; as_host git -c safe.directory=/workspace commit -m \"$AI_STUDIO_COMMIT_MESSAGE\"; fi",
+    "if ! as_host git -c safe.directory=/workspace rev-parse --verify HEAD >/dev/null 2>&1; then if [ -z \"$(as_host git -c safe.directory=/workspace status --porcelain=v1)\" ]; then echo 'No files to checkpoint and no commits exist.'; exit 1; fi; as_host git -c safe.directory=/workspace add .; as_host git -c safe.directory=/workspace commit -m \"$AI_STUDIO_COMMIT_MESSAGE\"; fi",
     "branch=\"$(as_host git -c safe.directory=/workspace branch --show-current)\"",
     "if [ -z \"$branch\" ]; then echo 'No current branch.'; exit 1; fi",
     "as_host git -c safe.directory=/workspace -c credential.helper= push -u origin HEAD",
@@ -250,8 +250,8 @@ function gitCheckpointRepair() {
     actionId: "terminal-git-checkpoint",
     command: [
       "git status --short",
-      "git add .",
-      "git commit -m \"<commitMessage>\"",
+      "git add . # only when the repo has no commits yet",
+      "git commit -m \"<commitMessage>\" # only when the repo has no commits yet",
       "git push -u origin HEAD"
     ].join("\n"),
     fields: [
@@ -598,26 +598,19 @@ async function checkGitCheckpoint(targetRoot, context) {
     });
   }
 
-  if (status.stdout) {
-    return blockedCheck({
-      id: "git-checkpoint",
-      label: "Git checkpoint",
-      expected: "Working tree is clean and the checkpoint commit is pushed to origin.",
-      observed: status.stdout.split(/\r?\n/u).slice(0, 40).join("\n"),
-      explanation: "App Setup created or left files in the target app. Review the exact file list, then create and push the baseline checkpoint before Studio continues.",
-      repair: gitCheckpointRepair()
-    });
-  }
-
   const localHead = await runGit(targetRoot, ["rev-parse", "--verify", "HEAD"], {
     timeout: 15_000
   });
   if (!localHead.ok || !localHead.stdout) {
+    const observed = [
+      localHead.output || "No local commits exist.",
+      status.stdout ? `Working tree:\n${status.stdout.split(/\r?\n/u).slice(0, 40).join("\n")}` : ""
+    ].filter(Boolean).join("\n\n");
     return blockedCheck({
       id: "git-checkpoint",
       label: "Git checkpoint",
       expected: "A setup checkpoint commit exists and is pushed to origin.",
-      observed: localHead.output || "No local commits exist.",
+      observed,
       explanation: "Create the first setup checkpoint commit and push it before Studio continues.",
       repair: gitCheckpointRepair()
     });
@@ -684,9 +677,12 @@ async function checkGitCheckpoint(targetRoot, context) {
   return passCheck({
     id: "git-checkpoint",
     label: "Git checkpoint",
-    expected: "Working tree is clean and the checkpoint commit is pushed to origin.",
-    observed: `Clean\nHEAD ${localHead.stdout} matches origin/${branch}.`,
-    explanation: "Setup changes are committed locally and published as the baseline remote branch."
+    expected: "A checkpoint commit exists and is pushed to origin.",
+    observed: [
+      `HEAD ${localHead.stdout} matches origin/${branch}.`,
+      status.stdout ? `Uncommitted work is present:\n${status.stdout.split(/\r?\n/u).slice(0, 40).join("\n")}` : "Working tree is clean."
+    ].join("\n"),
+    explanation: "The target has a published baseline commit. Uncommitted work can remain for normal development and later Studio sessions."
   });
 }
 
@@ -732,7 +728,7 @@ function genericSetupChecks(targetRoot, context) {
 function finalSetupChecks(targetRoot, context) {
   return [
     {
-      expected: "Working tree is clean and the checkpoint commit is pushed to origin.",
+      expected: "A checkpoint commit exists and is pushed to origin.",
       id: "git-checkpoint",
       label: "Git checkpoint",
       run: () => checkGitCheckpoint(targetRoot, context)

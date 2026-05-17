@@ -1,10 +1,11 @@
 # JSKIT AI Studio Agent Notes
 
-Use `jskit session` for issue-driven work in the current target app.
+This repository is a JSKIT app. Use JSKIT commands for JSKIT project work, and run them through `npx jskit ...` from the repository. Do not assume a global `jskit` binary exists.
 
 Important boundaries:
 
-- Session truth lives in `<target-root>/.jskit/sessions/active/<session_id>/`.
-- Studio is a UI over the JSKIT session runtime, not a second issue workflow.
-- Do not recreate the retired long AGENTS workflow or loose workboard/blueprint files.
-- Run `jskit session`, `jskit session <id>`, and `jskit session <id> step` to inspect or advance work.
+- Session truth lives in `<target-root>/.ai-studio/sessions/active/<session_id>/`.
+- Studio owns the AI Studio session runtime directly. Inspect AI Studio sessions through `.ai-studio`.
+- Use `npx jskit ...` freely for app/framework tasks such as verification, scaffold checks, generator work, JSKIT metadata, and adapter-specific project inspection.
+- Do not create loose workboard files.
+- Do not run bare `jskit ...`. Use `npx jskit ...`.

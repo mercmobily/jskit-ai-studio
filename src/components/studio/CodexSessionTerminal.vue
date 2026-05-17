@@ -146,7 +146,14 @@ const props = defineProps({
     default: ""
   }
 });
-const emit = defineEmits(["input", "output", "prompt-injected", "prompt-injection-failed", "session-update"]);
+const emit = defineEmits([
+  "busy-changed",
+  "input",
+  "output",
+  "prompt-injected",
+  "prompt-injection-failed",
+  "session-update"
+]);
 const codexCommands = useAiStudioCodexCommands();
 
 const terminalHost = ref(null);
@@ -154,6 +161,7 @@ const terminalSessionId = ref("");
 const terminalStatus = ref("");
 const terminalCommandPreview = ref("");
 const terminalError = ref("");
+const codexBusy = ref(false);
 const terminalFocused = ref(false);
 const terminalStarting = ref(false);
 const terminalSelectedText = ref("");
@@ -183,9 +191,11 @@ let terminalSocket = null;
 let terminalSocketOpenPromise = null;
 let terminalReconnectTimer = null;
 let terminalOutputEmitTimer = null;
+let codexIdleTimer = null;
 let terminalSetupPromise = null;
 let terminalOutputOffset = 0;
 let terminalDisplayOutput = "";
+let codexBusyDisplayLength = 0;
 let terminalStartPromise = null;
 let terminalRecoveryPromise = null;
 let codexThreadCapturePromise = null;
@@ -207,11 +217,20 @@ const CODEX_BOOT_TIMEOUT_MS = 12000;
 const CODEX_KEY_PAUSE_MS = 180;
 const PROMPT_INJECTION_RETRY_MS = 350;
 const PROMPT_INJECTION_RETRY_TIMEOUT_MS = 15000;
+const CODEX_ACTIVITY_QUIET_MS = 2200;
 const CODEX_TERMINAL_SCROLLBACK_LINES = 50000;
 const MAX_TERMINAL_OUTPUT_LENGTH = 16 * 1024 * 1024;
 const TERMINAL_OUTPUT_EMIT_INTERVAL_MS = 120;
 
 const sessionId = computed(() => props.session?.sessionId || "");
+const sessionWorktree = computed(() => {
+  return String(
+    props.session?.metadata?.worktree_path ||
+    props.session?.worktree ||
+    ""
+  ).trim();
+});
+
 function runtimeCodexPromptHandoff(session = {}) {
   const actionResultHandoff = session?.actionResult?.codexPromptHandoff;
   if (actionResultHandoff && typeof actionResultHandoff === "object") {
@@ -222,13 +241,7 @@ function runtimeCodexPromptHandoff(session = {}) {
 }
 
 const canUseTerminal = computed(() => {
-  return Boolean(
-    sessionId.value &&
-    (
-      props.session?.worktreeReady === true ||
-      (props.session?.workflowId && props.session?.targetRoot)
-    )
-  );
+  return Boolean(sessionId.value && sessionWorktree.value);
 });
 const codexPrompt = computed(() => {
   if (props.promptOverride) {
@@ -340,6 +353,53 @@ function displayTerminalOutput(output) {
   return stripStudioContextBlocksForDisplay(promptEchoFilters.apply(output));
 }
 
+function displayedTerminalOutputLength() {
+  return displayTerminalOutput(terminalLatestOutput).length;
+}
+
+function clearCodexIdleTimer() {
+  if (!codexIdleTimer) {
+    return;
+  }
+  window.clearTimeout(codexIdleTimer);
+  codexIdleTimer = null;
+}
+
+function setCodexBusy(nextBusy) {
+  const busy = Boolean(nextBusy);
+  if (codexBusy.value === busy) {
+    return;
+  }
+  codexBusy.value = busy;
+  emit("busy-changed", {
+    busy,
+    sessionId: sessionId.value
+  });
+}
+
+function markCodexBusy() {
+  clearCodexIdleTimer();
+  codexBusyDisplayLength = displayedTerminalOutputLength();
+  setCodexBusy(true);
+}
+
+function clearCodexBusy() {
+  clearCodexIdleTimer();
+  codexBusyDisplayLength = displayedTerminalOutputLength();
+  setCodexBusy(false);
+}
+
+function scheduleCodexIdleWhenQuiet() {
+  if (!codexBusy.value || displayedTerminalOutputLength() <= codexBusyDisplayLength) {
+    return;
+  }
+  clearCodexIdleTimer();
+  codexIdleTimer = window.setTimeout(() => {
+    codexIdleTimer = null;
+    clearCodexBusy();
+  }, CODEX_ACTIVITY_QUIET_MS);
+}
+
 function writeTerminalDisplay(output) {
   const displayOutput = displayTerminalOutput(output);
   if (!terminalInstance) {
@@ -395,6 +455,7 @@ function scheduleTerminalOutputEmit() {
 
 function disposeTerminalUi() {
   flushTerminalOutputEmit();
+  clearCodexBusy();
   closeTerminalSocket();
   if (terminalDataDisposable) {
     terminalDataDisposable.dispose();
@@ -527,6 +588,7 @@ function writeTerminalOutput(output) {
   }
   void captureCodexThreadFromOutput(nextOutput);
   writeTerminalDisplay(nextOutput);
+  scheduleCodexIdleWhenQuiet();
 }
 
 function appendTerminalOutput(chunk) {
@@ -540,6 +602,7 @@ function appendTerminalOutput(chunk) {
   terminalHasOutput = terminalHasOutput || stripTerminalControlSequences(outputChunk).trim().length > 0;
   void captureCodexThreadFromOutput(nextOutput);
   writeTerminalDisplay(nextOutput);
+  scheduleCodexIdleWhenQuiet();
   scheduleTerminalOutputEmit();
 }
 
@@ -643,6 +706,9 @@ function handleTerminalSocketMessage(rawMessage) {
 
   if (message?.type === "status") {
     terminalStatus.value = message.status || terminalStatus.value || "";
+    if (terminalStatus.value === "exited") {
+      clearCodexBusy();
+    }
     return;
   }
 
@@ -803,6 +869,11 @@ async function sendTerminalData(data, {
       data: input,
       type: "input"
     }));
+    if (source === "user" && input.includes("\u0003")) {
+      clearCodexBusy();
+    } else if (source === "user" && input.includes("\r")) {
+      markCodexBusy();
+    }
     if (source === "user" && terminalInputHasUserText(input)) {
       emit("input", input);
     }
@@ -1099,6 +1170,7 @@ async function injectPrompt() {
         outputStart: promptOutputSnapshot.length,
         prompt: promptToSend
       });
+      markCodexBusy();
       const sent = await sendTerminalData(`\u001b[200~${promptToSend}\u001b[201~\r`);
       if (sent) {
         autoPromptInjected.value = true;
@@ -1112,6 +1184,7 @@ async function injectPrompt() {
       }
       if (!sent) {
         promptEchoFilters.remove(promptEchoFilter);
+        clearCodexBusy();
       }
       return sent;
     }
@@ -1158,6 +1231,7 @@ function schedulePromptInjectionRetry(requestKey) {
     promptInjectionRetryStartedAt = Date.now();
   }
   if (Date.now() - promptInjectionRetryStartedAt > PROMPT_INJECTION_RETRY_TIMEOUT_MS) {
+    clearCodexBusy();
     emit("prompt-injection-failed", {
       error: "Prompt injection timed out before the Codex terminal accepted the request.",
       requestKey,
