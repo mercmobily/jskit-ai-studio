@@ -139,7 +139,7 @@
 </template>
 
 <script setup>
-import { computed, defineComponent, h, ref } from "vue";
+import { computed, ref } from "vue";
 import {
   mdiCheckCircleOutline,
   mdiClose,
@@ -148,6 +148,9 @@ import {
   mdiFullscreen,
   mdiPencilOutline
 } from "@mdi/js";
+
+import LongTextPreviewBlocks from "./LongTextPreviewBlocks.vue";
+import { parseLongTextReviewBlocks } from "../../lib/studioLongTextBlocks.js";
 
 const props = defineProps({
   label: {
@@ -212,7 +215,7 @@ const editableText = computed({
 });
 
 const contentText = computed(() => String(props.modelValue || "").trim());
-const contentBlocks = computed(() => parseMarkdownBlocks(contentText.value));
+const contentBlocks = computed(() => parseLongTextReviewBlocks(contentText.value));
 const normalizedContentLabel = computed(() => {
   const label = String(props.contentLabel || props.label || "text").trim();
   return label ? label.toLowerCase() : "text";
@@ -257,189 +260,6 @@ function sentenceCase(value) {
   return text ? `${text.slice(0, 1).toUpperCase()}${text.slice(1)}` : "Text";
 }
 
-function parseMarkdownBlocks(value) {
-  const lines = String(value || "").replace(/\r\n/gu, "\n").split("\n");
-  const blocks = [];
-  let paragraphLines = [];
-  let listBlock = null;
-  let codeLines = null;
-
-  const flushParagraph = () => {
-    const text = paragraphLines.join(" ").replace(/\s+/gu, " ").trim();
-    paragraphLines = [];
-    if (text) {
-      blocks.push({
-        text,
-        type: "paragraph"
-      });
-    }
-  };
-
-  const flushList = () => {
-    if (listBlock?.items.length) {
-      blocks.push(listBlock);
-    }
-    listBlock = null;
-  };
-
-  const flushCode = () => {
-    if (codeLines) {
-      blocks.push({
-        text: codeLines.join("\n").replace(/\n+$/u, ""),
-        type: "code"
-      });
-    }
-    codeLines = null;
-  };
-
-  for (const rawLine of lines) {
-    const line = rawLine.replace(/\s+$/u, "");
-    const trimmed = line.trim();
-
-    if (codeLines) {
-      if (/^```/u.test(trimmed)) {
-        flushCode();
-      } else {
-        codeLines.push(line);
-      }
-      continue;
-    }
-
-    if (/^```/u.test(trimmed)) {
-      flushParagraph();
-      flushList();
-      codeLines = [];
-      continue;
-    }
-
-    if (!trimmed) {
-      flushParagraph();
-      flushList();
-      continue;
-    }
-
-    const headingMatch = trimmed.match(/^(#{1,6})\s+(.+)$/u);
-    if (headingMatch) {
-      flushParagraph();
-      flushList();
-      blocks.push({
-        level: headingMatch[1].length,
-        text: headingMatch[2].trim(),
-        type: "heading"
-      });
-      continue;
-    }
-
-    const unorderedMatch = trimmed.match(/^[-*+]\s+(.*)$/u);
-    const orderedMatch = trimmed.match(/^\d+[.)]\s+(.*)$/u);
-    if (unorderedMatch || orderedMatch) {
-      flushParagraph();
-      const type = orderedMatch ? "ol" : "ul";
-      if (!listBlock || listBlock.type !== type) {
-        flushList();
-        listBlock = {
-          items: [],
-          type
-        };
-      }
-      listBlock.items.push({
-        text: (orderedMatch?.[1] || unorderedMatch?.[1] || "").trim()
-      });
-      continue;
-    }
-
-    flushList();
-    paragraphLines.push(trimmed);
-  }
-
-  flushParagraph();
-  flushList();
-  flushCode();
-  return blocks;
-}
-
-function headingTag(level) {
-  if (level <= 1) {
-    return "h3";
-  }
-  if (level === 2) {
-    return "h4";
-  }
-  return "h5";
-}
-
-const LongTextPreviewBlocks = defineComponent({
-  name: "LongTextPreviewBlocks",
-  props: {
-    blocks: {
-      type: Array,
-      required: true
-    },
-    compact: {
-      type: Boolean,
-      default: false
-    }
-  },
-  setup(componentProps) {
-    return () => h(
-      "div",
-      {
-        class: [
-          "studio-long-text-review__blocks",
-          {
-            "studio-long-text-review__blocks--compact": componentProps.compact
-          }
-        ]
-      },
-      componentProps.blocks.map((block, blockIndex) => {
-        if (block.type === "heading") {
-          return h(
-            headingTag(block.level),
-            {
-              class: "studio-long-text-review__heading",
-              key: `heading:${blockIndex}`
-            },
-            block.text
-          );
-        }
-        if (block.type === "ul" || block.type === "ol") {
-          return h(
-            block.type,
-            {
-              class: "studio-long-text-review__list",
-              key: `list:${blockIndex}`
-            },
-            block.items.map((item, itemIndex) => h(
-              "li",
-              {
-                key: `item:${itemIndex}`
-              },
-              item.text
-            ))
-          );
-        }
-        if (block.type === "code") {
-          return h(
-            "pre",
-            {
-              class: "studio-long-text-review__code",
-              key: `code:${blockIndex}`
-            },
-            h("code", block.text)
-          );
-        }
-        return h(
-          "p",
-          {
-            class: "studio-long-text-review__paragraph",
-            key: `paragraph:${blockIndex}`
-          },
-          block.text
-        );
-      })
-    );
-  }
-});
 </script>
 
 <style scoped>
@@ -530,77 +350,6 @@ const LongTextPreviewBlocks = defineComponent({
   max-width: 76rem;
   padding: clamp(0.86rem, 1.8vw, 1.35rem);
   width: 100%;
-}
-
-.studio-long-text-review__preview :deep(.studio-long-text-review__blocks) {
-  color: rgb(var(--v-theme-on-surface));
-  display: grid;
-  gap: 0.36rem;
-  line-height: 1.4;
-}
-
-.studio-long-text-review__preview :deep(.studio-long-text-review__blocks--compact) {
-  gap: 0.24rem;
-  line-height: 1.28;
-}
-
-.studio-long-text-review__preview :deep(.studio-long-text-review__heading) {
-  font-weight: 760;
-  letter-spacing: 0;
-  line-height: 1.15;
-  margin: 0;
-}
-
-.studio-long-text-review__preview :deep(h3.studio-long-text-review__heading) {
-  font-size: 1.1rem;
-}
-
-.studio-long-text-review__preview :deep(h4.studio-long-text-review__heading) {
-  font-size: 0.98rem;
-}
-
-.studio-long-text-review__preview :deep(h5.studio-long-text-review__heading) {
-  font-size: 0.9rem;
-}
-
-.studio-long-text-review__preview :deep(.studio-long-text-review__paragraph) {
-  font-size: 0.88rem;
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-
-.studio-long-text-review__preview :deep(.studio-long-text-review__blocks--compact .studio-long-text-review__paragraph) {
-  font-size: 0.8rem;
-}
-
-.studio-long-text-review__preview :deep(.studio-long-text-review__list) {
-  display: grid;
-  gap: 0.16rem;
-  margin: 0;
-  padding-inline-start: 1.3rem;
-}
-
-.studio-long-text-review__preview :deep(.studio-long-text-review__list li) {
-  font-size: 0.92rem;
-  line-height: 1.36;
-  padding-inline-start: 0.1rem;
-}
-
-.studio-long-text-review__preview :deep(.studio-long-text-review__blocks--compact .studio-long-text-review__list li) {
-  font-size: 0.8rem;
-}
-
-.studio-long-text-review__preview :deep(.studio-long-text-review__code) {
-  background: rgba(var(--v-theme-surface-variant), 0.58);
-  border: 1px solid rgba(var(--v-border-color), 0.26);
-  border-radius: 8px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-  font-size: 0.82rem;
-  line-height: 1.36;
-  margin: 0;
-  overflow: auto;
-  padding: 0.46rem 0.55rem;
-  white-space: pre;
 }
 
 .studio-long-text-review__empty {

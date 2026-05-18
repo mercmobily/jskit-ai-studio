@@ -1,0 +1,26 @@
+Prepare for merge
+
+AI Studio standard merge-preparation instructions.
+
+Session:
+- id: {{session.id}}
+- current step: {{session.currentStep}}
+- target root: {{session.targetRoot}}
+- worktree path: {{session.worktreePath}}
+
+Known session metadata:
+{{session.metadata.json}}
+
+Adapter project facts:
+{{adapter.facts.json}}
+
+Adapter prompt context:
+{{adapter.promptContext.json}}
+
+Project config:
+{{config.json}}
+
+Action input:
+{{input.json}}
+
+Use the recorded PR URL from session metadata. Check the PR state, identify merge blockers, resolve blockers that can be fixed locally, and keep changes scoped to making the PR mergeable. Report whether the PR is ready to merge and what remains blocked.

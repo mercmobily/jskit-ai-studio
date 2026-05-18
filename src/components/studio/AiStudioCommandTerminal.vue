@@ -129,6 +129,7 @@ const paths = usePaths();
 let terminalStartPromise = null;
 let finishedEmittedForTerminalId = "";
 let handledStartRequestKey = "";
+let pendingStartRequestKey = "";
 
 const FINISHED_TERMINAL_HOLD_MS = 500;
 
@@ -314,14 +315,17 @@ async function startTerminal() {
     return terminalStartPromise;
   }
   terminalStartPromise = (async () => {
-    terminalStarting.value = true;
-    emitRunningState();
-    terminalError.value = "";
-    expanded.value = true;
-    if (!(await setupTerminalUi())) {
-      terminalError.value = "Terminal view is not ready yet.";
-      return false;
-    }
+      terminalStarting.value = true;
+      emitRunningState();
+      terminalError.value = "";
+      expanded.value = true;
+      if (!terminalHost.value) {
+        return false;
+      }
+      if (!(await setupTerminalUi())) {
+        terminalError.value = "Terminal view is not ready yet.";
+        return false;
+      }
     try {
       terminalClosedByUser.value = false;
       const session = await startTerminalCommand.run({
@@ -369,6 +373,21 @@ async function startTerminal() {
   }
 }
 
+async function startPendingRequest() {
+  if (
+    !pendingStartRequestKey ||
+    pendingStartRequestKey === handledStartRequestKey ||
+    !terminalHost.value ||
+    !canStartTerminal.value
+  ) {
+    return;
+  }
+
+  const startRequestKey = pendingStartRequestKey;
+  handledStartRequestKey = startRequestKey;
+  await startTerminal();
+}
+
 async function closeTerminal({
   emitClosed = true
 } = {}) {
@@ -408,11 +427,12 @@ function toggleExpanded() {
 
 watch(() => props.startRequestKey, async (nextKey) => {
   const normalizedKey = String(nextKey || "");
-  if (!normalizedKey || normalizedKey === handledStartRequestKey) {
+  if (!normalizedKey) {
+    pendingStartRequestKey = "";
     return;
   }
-  handledStartRequestKey = normalizedKey;
-  await startTerminal();
+  pendingStartRequestKey = normalizedKey;
+  await startPendingRequest();
 }, {
   immediate: true
 });
@@ -420,6 +440,8 @@ watch(() => props.startRequestKey, async (nextKey) => {
 watch(sessionId, () => {
   resetTerminalSessionState();
   resetTerminalDisplay();
+  handledStartRequestKey = "";
+  pendingStartRequestKey = "";
   finishedEmittedForTerminalId = "";
   terminalClosedByUser.value = false;
   closeTerminalSocket();
@@ -429,6 +451,7 @@ watch(sessionId, () => {
 watch(terminalHost, (host) => {
   if (host) {
     void setupTerminalUi();
+    void startPendingRequest();
   }
 }, {
   flush: "post"

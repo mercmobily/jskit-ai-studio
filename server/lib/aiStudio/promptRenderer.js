@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   aiStudioError,
   isMissingPathError,
@@ -11,6 +12,7 @@ import {
 } from "./sessionStore.js";
 
 const DEFAULT_PROMPT_ID = "generic";
+const DEFAULT_SYSTEM_PROMPT_PACK_ROOT = fileURLToPath(new URL("./systemPrompts", import.meta.url));
 const PROMPT_OVERRIDES_DIR = "prompts";
 const PROMPT_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
 const TEMPLATE_TOKEN_PATTERN = /\{\{([A-Za-z0-9_.-]+)\}\}/gu;
@@ -68,6 +70,13 @@ function assertPromptPackRoot(promptPackRoot) {
     throw aiStudioError("AI Studio prompt renderer requires a prompt pack root.", "ai_studio_prompt_pack_root_missing");
   }
   return path.resolve(normalizedPromptPackRoot);
+}
+
+function optionalPromptPackRoot(promptPackRoot) {
+  if (promptPackRoot === false || promptPackRoot === null) {
+    return "";
+  }
+  return assertPromptPackRoot(promptPackRoot || DEFAULT_SYSTEM_PROMPT_PACK_ROOT);
 }
 
 async function readPromptTemplate(promptPackRoot, promptId) {
@@ -206,6 +215,13 @@ function promptOverrideTokens(originalPrompt = "") {
   };
 }
 
+function promptSystemStandardTokens(systemStandard = "") {
+  return {
+    "prompt.systemStandard": String(systemStandard || ""),
+    systemStandard: String(systemStandard || "")
+  };
+}
+
 function scalarPromptContextTokens(promptContext = {}) {
   const entries = Object.entries(isPlainObject(promptContext) ? promptContext : {})
     .filter(([, value]) => ["boolean", "number", "string"].includes(typeof value))
@@ -230,7 +246,8 @@ function renderPromptTemplate(template, context, extraTokens = {}) {
 
 async function renderPromptWithOverrides({
   context = {},
-  originalPrompt = ""
+  originalPrompt = "",
+  systemStandard = ""
 } = {}) {
   const normalizedContext = normalizePromptContext(context);
   const normalizedOriginalPrompt = String(originalPrompt || "");
@@ -241,7 +258,10 @@ async function renderPromptWithOverrides({
       ? renderPromptTemplate(
           override.template,
           normalizedContext,
-          promptOverrideTokens(normalizedOriginalPrompt)
+          {
+            ...promptOverrideTokens(normalizedOriginalPrompt),
+            ...promptSystemStandardTokens(systemStandard)
+          }
         )
       : normalizedOriginalPrompt,
     promptOverridePath: override?.filePath || ""
@@ -250,9 +270,19 @@ async function renderPromptWithOverrides({
 
 class PromptRenderer {
   constructor({
-    promptPackRoot = ""
+    promptPackRoot = "",
+    systemPromptPackRoot = DEFAULT_SYSTEM_PROMPT_PACK_ROOT
   } = {}) {
     this.promptPackRoot = assertPromptPackRoot(promptPackRoot);
+    this.systemPromptPackRoot = optionalPromptPackRoot(systemPromptPackRoot);
+  }
+
+  async renderSystemStandardPrompt(context) {
+    if (!this.systemPromptPackRoot) {
+      return "";
+    }
+    const template = await readPromptTemplate(this.systemPromptPackRoot, context.action.promptId || DEFAULT_PROMPT_ID);
+    return renderPromptTemplate(template, context);
   }
 
   async renderPrompt({
@@ -267,16 +297,23 @@ class PromptRenderer {
       input,
       session
     });
+    const systemStandard = await this.renderSystemStandardPrompt(context);
     const template = await readPromptTemplate(this.promptPackRoot, context.action.promptId || DEFAULT_PROMPT_ID);
-    const originalPrompt = renderPromptTemplate(template, context);
+    const originalPrompt = renderPromptTemplate(
+      template,
+      context,
+      promptSystemStandardTokens(systemStandard)
+    );
     const renderedPrompt = await renderPromptWithOverrides({
       context,
-      originalPrompt
+      originalPrompt,
+      systemStandard
     });
     return {
       context,
       ...renderedPrompt,
-      promptId: context.action.promptId
+      promptId: context.action.promptId,
+      systemStandard
     };
   }
 }

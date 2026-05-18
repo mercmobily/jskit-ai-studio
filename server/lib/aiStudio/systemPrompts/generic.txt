@@ -1,0 +1,37 @@
+Run {{action.label}}
+
+AI Studio standard workflow instructions.
+
+Action:
+- id: {{action.id}}
+- label: {{action.label}}
+- prompt: {{action.promptId}}
+
+Session:
+- id: {{session.id}}
+- current step: {{session.currentStep}}
+- status: {{session.status}}
+- target root: {{session.targetRoot}}
+- worktree path: {{session.worktreePath}}
+- artifacts root: {{session.artifactsRoot}}
+
+Session metadata:
+{{session.metadata.json}}
+
+Adapter:
+- id: {{adapter.id}}
+- label: {{adapter.label}}
+
+Adapter project facts:
+{{adapter.facts.json}}
+
+Adapter prompt context:
+{{adapter.promptContext.json}}
+
+Project config:
+{{config.json}}
+
+Action input:
+{{input.json}}
+
+Follow the current Codex conversation, Action input, session metadata, adapter facts, and project files as the source of truth. Work in the target project workspace. Do not inspect AI Studio session internals unless this prompt explicitly asks for that. In your normal Codex response, report the work completed, files modified, checks run, and remaining blockers. Do not run shell commands just to display the response.

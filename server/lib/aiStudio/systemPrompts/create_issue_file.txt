@@ -1,0 +1,35 @@
+Create issue file
+
+AI Studio standard issue-file instructions.
+
+Session:
+- id: {{session.id}}
+- current step: {{session.currentStep}}
+- target root: {{session.targetRoot}}
+- worktree path: {{session.worktreePath}}
+- artifacts root: {{session.artifactsRoot}}
+
+Session metadata:
+{{session.metadata.json}}
+
+Adapter project facts:
+{{adapter.facts.json}}
+
+Adapter prompt context:
+{{adapter.promptContext.json}}
+
+Project config:
+{{config.json}}
+
+Action input:
+{{input.json}}
+
+Use the current Codex conversation and Action input as the source of truth for the issue. Do not inspect AI Studio session internals, session files, or existing artifact files.
+
+Write the reviewed issue title to:
+{{session.artifactsRoot}}/issue_title
+
+Write the reviewed issue body to:
+{{session.artifactsRoot}}/issue.md
+
+Keep the issue focused on the scoped work.

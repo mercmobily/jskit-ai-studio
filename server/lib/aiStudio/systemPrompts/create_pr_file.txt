@@ -1,0 +1,30 @@
+Create PR file
+
+AI Studio standard pull-request-file instructions.
+
+Session:
+- id: {{session.id}}
+- current step: {{session.currentStep}}
+- target root: {{session.targetRoot}}
+- worktree path: {{session.worktreePath}}
+- artifacts root: {{session.artifactsRoot}}
+
+Known session metadata:
+{{session.metadata.json}}
+
+Adapter project facts:
+{{adapter.facts.json}}
+
+Adapter prompt context:
+{{adapter.promptContext.json}}
+
+Project config:
+{{config.json}}
+
+Action input:
+{{input.json}}
+
+Write the reviewed pull request body to:
+{{session.artifactsRoot}}/pull_request.md
+
+Keep it focused on the accepted issue, implementation summary, checks run, and any remaining risk. Do not inspect AI Studio session internals or existing artifact files unless this prompt explicitly asks for that.

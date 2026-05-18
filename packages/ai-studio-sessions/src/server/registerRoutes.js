@@ -1,5 +1,3 @@
-import { resolveScopedApiBasePath, normalizeSurfaceId } from "@jskit-ai/kernel/shared/surface";
-
 import {
   ACTION_ABANDON_SESSION,
   ACTION_ADVANCE_SESSION,
@@ -10,19 +8,7 @@ import {
   ACTION_REWIND_SESSION,
   ACTION_RUN_SESSION_ACTION
 } from "./actions.js";
-import {
-  requireLocalStudioRequest
-} from "../../../../server/lib/localStudioRequest.js";
-import {
-  aiStudioStatusCode,
-  requestBodyObject
-} from "../../../../server/lib/aiStudio/serverResponses.js";
-
-function requireLocalAiStudioRequest(request, reply) {
-  return requireLocalStudioRequest(request, reply, {
-    message: "AI Studio session routes only accept loopback Studio requests."
-  });
-}
+import { createAiStudioFeatureRoutes } from "../../../../server/lib/aiStudio/featureRoutes.js";
 
 function registerRoutes(
   app,
@@ -31,217 +17,75 @@ function registerRoutes(
     routeRelativePath = ""
   } = {}
 ) {
-  if (!app || typeof app.make !== "function") {
-    throw new Error("registerRoutes requires application make().");
-  }
-
-  const router = app.make("jskit.http.router");
-  const normalizedRouteSurface = normalizeSurfaceId(routeSurface);
-  const routeBase = resolveScopedApiBasePath({
-    routeBase: "/",
-    relativePath: routeRelativePath,
-    strictParams: false
+  const routes = createAiStudioFeatureRoutes(app, {
+    localRequestMessage: "AI Studio session routes only accept loopback Studio requests.",
+    routeRelativePath,
+    routeSurface,
+    tags: ["studio", "ai-studio-sessions"]
   });
 
-  router.register(
-    "GET",
-    `${routeBase}/sessions`,
-    {
-      auth: "public",
-      surface: normalizedRouteSurface,
-      meta: {
-        tags: ["studio", "ai-studio-sessions"],
-        summary: "List AI Studio sessions."
-      }
-    },
-    async function (request, reply) {
-      if (!requireLocalAiStudioRequest(request, reply)) {
-        return;
-      }
-      const response = await request.executeAction({
-        actionId: ACTION_LIST_SESSIONS,
-        input: {}
-      });
-      reply.code(aiStudioStatusCode(response)).send(response);
-    }
-  );
+  routes.actionRoute("GET", "/sessions", {
+    actionId: ACTION_LIST_SESSIONS,
+    summary: "List AI Studio sessions."
+  });
 
-  router.register(
-    "POST",
-    `${routeBase}/sessions`,
-    {
-      auth: "public",
-      surface: normalizedRouteSurface,
-      meta: {
-        tags: ["studio", "ai-studio-sessions"],
-        summary: "Create an AI Studio session."
-      }
-    },
-    async function (request, reply) {
-      if (!requireLocalAiStudioRequest(request, reply)) {
-        return;
-      }
-      const response = await request.executeAction({
-        actionId: ACTION_CREATE_SESSION,
-        input: {}
-      });
-      reply.code(aiStudioStatusCode(response)).send(response);
-    }
-  );
+  routes.actionRoute("POST", "/sessions", {
+    actionId: ACTION_CREATE_SESSION,
+    summary: "Create an AI Studio session."
+  });
 
-  router.register(
-    "GET",
-    `${routeBase}/sessions/:sessionId`,
-    {
-      auth: "public",
-      surface: normalizedRouteSurface,
-      meta: {
-        tags: ["studio", "ai-studio-sessions"],
-        summary: "Inspect an AI Studio session."
-      }
-    },
-    async function (request, reply) {
-      if (!requireLocalAiStudioRequest(request, reply)) {
-        return;
-      }
-      const response = await request.executeAction({
-        actionId: ACTION_INSPECT_SESSION,
-        input: {
-          sessionId: request.params.sessionId
-        }
-      });
-      reply.code(aiStudioStatusCode(response)).send(response);
-    }
-  );
+  routes.actionRoute("GET", "/sessions/:sessionId", {
+    actionId: ACTION_INSPECT_SESSION,
+    buildInput: sessionInput,
+    summary: "Inspect an AI Studio session."
+  });
 
-  router.register(
-    "GET",
-    `${routeBase}/sessions/:sessionId/diff`,
-    {
-      auth: "public",
-      surface: normalizedRouteSurface,
-      meta: {
-        tags: ["studio", "ai-studio-sessions"],
-        summary: "Inspect an AI Studio session worktree diff."
-      }
-    },
-    async function (request, reply) {
-      if (!requireLocalAiStudioRequest(request, reply)) {
-        return;
-      }
-      const response = await request.executeAction({
-        actionId: ACTION_INSPECT_SESSION_DIFF,
-        input: {
-          sessionId: request.params.sessionId
-        }
-      });
-      reply.code(aiStudioStatusCode(response)).send(response);
-    }
-  );
+  routes.actionRoute("GET", "/sessions/:sessionId/diff", {
+    actionId: ACTION_INSPECT_SESSION_DIFF,
+    buildInput: sessionInput,
+    summary: "Inspect an AI Studio session worktree diff."
+  });
 
-  router.register(
-    "POST",
-    `${routeBase}/sessions/:sessionId/actions/:actionId`,
-    {
-      auth: "public",
-      surface: normalizedRouteSurface,
-      meta: {
-        tags: ["studio", "ai-studio-sessions"],
-        summary: "Run an AI Studio session action."
-      }
+  routes.actionRoute("POST", "/sessions/:sessionId/actions/:actionId", {
+    actionId: ACTION_RUN_SESSION_ACTION,
+    buildInput(request) {
+      return {
+        actionId: request.params.actionId,
+        input: routes.requestBody(request),
+        sessionId: request.params.sessionId
+      };
     },
-    async function (request, reply) {
-      if (!requireLocalAiStudioRequest(request, reply)) {
-        return;
-      }
-      const response = await request.executeAction({
-        actionId: ACTION_RUN_SESSION_ACTION,
-        input: {
-          actionId: request.params.actionId,
-          input: requestBodyObject(request),
-          sessionId: request.params.sessionId
-        }
-      });
-      reply.code(aiStudioStatusCode(response)).send(response);
-    }
-  );
+    summary: "Run an AI Studio session action."
+  });
 
-  router.register(
-    "POST",
-    `${routeBase}/sessions/:sessionId/advance`,
-    {
-      auth: "public",
-      surface: normalizedRouteSurface,
-      meta: {
-        tags: ["studio", "ai-studio-sessions"],
-        summary: "Advance an AI Studio session."
-      }
-    },
-    async function (request, reply) {
-      if (!requireLocalAiStudioRequest(request, reply)) {
-        return;
-      }
-      const response = await request.executeAction({
-        actionId: ACTION_ADVANCE_SESSION,
-        input: {
-          sessionId: request.params.sessionId
-        }
-      });
-      reply.code(aiStudioStatusCode(response)).send(response);
-    }
-  );
+  routes.actionRoute("POST", "/sessions/:sessionId/advance", {
+    actionId: ACTION_ADVANCE_SESSION,
+    buildInput: sessionInput,
+    summary: "Advance an AI Studio session."
+  });
 
-  router.register(
-    "POST",
-    `${routeBase}/sessions/:sessionId/rewind`,
-    {
-      auth: "public",
-      surface: normalizedRouteSurface,
-      meta: {
-        tags: ["studio", "ai-studio-sessions"],
-        summary: "Rewind an AI Studio session."
-      }
+  routes.actionRoute("POST", "/sessions/:sessionId/rewind", {
+    actionId: ACTION_REWIND_SESSION,
+    buildInput(request) {
+      return {
+        sessionId: request.params.sessionId,
+        stepId: routes.requestBody(request).stepId
+      };
     },
-    async function (request, reply) {
-      if (!requireLocalAiStudioRequest(request, reply)) {
-        return;
-      }
-      const body = requestBodyObject(request);
-      const response = await request.executeAction({
-        actionId: ACTION_REWIND_SESSION,
-        input: {
-          sessionId: request.params.sessionId,
-          stepId: body.stepId
-        }
-      });
-      reply.code(aiStudioStatusCode(response)).send(response);
-    }
-  );
+    summary: "Rewind an AI Studio session."
+  });
 
-  router.register(
-    "POST",
-    `${routeBase}/sessions/:sessionId/abandon`,
-    {
-      auth: "public",
-      surface: normalizedRouteSurface,
-      meta: {
-        tags: ["studio", "ai-studio-sessions"],
-        summary: "Abandon an AI Studio session."
-      }
-    },
-    async function (request, reply) {
-      if (!requireLocalAiStudioRequest(request, reply)) {
-        return;
-      }
-      const response = await request.executeAction({
-        actionId: ACTION_ABANDON_SESSION,
-        input: {
-          sessionId: request.params.sessionId
-        }
-      });
-      reply.code(aiStudioStatusCode(response)).send(response);
-    }
-  );
+  routes.actionRoute("POST", "/sessions/:sessionId/abandon", {
+    actionId: ACTION_ABANDON_SESSION,
+    buildInput: sessionInput,
+    summary: "Abandon an AI Studio session."
+  });
+}
+
+function sessionInput(request) {
+  return {
+    sessionId: request.params.sessionId
+  };
 }
 
 export { registerRoutes };

@@ -1,0 +1,26 @@
+Run deep UI check
+
+AI Studio standard deep UI check instructions.
+
+Session:
+- id: {{session.id}}
+- current step: {{session.currentStep}}
+- target root: {{session.targetRoot}}
+- worktree path: {{session.worktreePath}}
+
+Known session metadata:
+{{session.metadata.json}}
+
+Adapter project facts:
+{{adapter.facts.json}}
+
+Adapter prompt context:
+{{adapter.promptContext.json}}
+
+Project config:
+{{config.json}}
+
+Action input:
+{{input.json}}
+
+Inspect the user-facing application behavior carefully. Focus on real UI defects, broken flows, layout issues, state mistakes, and mismatches with the requested work. Fix clear defects directly when the project supports it. Report what you changed, which checks ran, and why no edit was needed if the UI is already sound.

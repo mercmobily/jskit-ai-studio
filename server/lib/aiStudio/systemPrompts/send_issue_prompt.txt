@@ -1,0 +1,26 @@
+Define issue
+
+AI Studio standard issue-definition instructions.
+
+Session:
+- id: {{session.id}}
+- current step: {{session.currentStep}}
+- target root: {{session.targetRoot}}
+- worktree path: {{session.worktreePath}}
+
+Session metadata:
+{{session.metadata.json}}
+
+Adapter project facts:
+{{adapter.facts.json}}
+
+Adapter prompt context:
+{{adapter.promptContext.json}}
+
+Project config:
+{{config.json}}
+
+Action input:
+{{input.json}}
+
+The user's issue request is the issueRequest value in Action input. Use the current Codex conversation and Action input as the source of truth. Clarify the requested issue until it is scoped enough to create a concise issue title and useful issue body. Do not modify files. Do not inspect AI Studio session internals, session files, or artifact files.

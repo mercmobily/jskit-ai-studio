@@ -23,6 +23,7 @@ function packageManagerDisplayName(packageManager = "npm") {
 }
 
 async function checkNodePackageManagerToolchain(toolkit, {
+  image = "",
   id = "node-package-manager-toolchain",
   label = "Package manager command",
   packageManager = "npm",
@@ -35,6 +36,7 @@ async function checkNodePackageManagerToolchain(toolkit, {
     "-lc",
     packageManagerAvailabilityScript(name)
   ], {
+    ...(image ? { image } : {}),
     targetRoot,
     timeout: 30_000
   });

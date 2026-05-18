@@ -1,23 +1,9 @@
-import { resolveScopedApiBasePath, normalizeSurfaceId } from "@jskit-ai/kernel/shared/surface";
-
 import { artifactsInputValidator } from "./inputSchemas.js";
 import {
   ACTION_READ_ARTIFACTS,
   ACTION_SAVE_ARTIFACTS
 } from "./actions.js";
-import {
-  requireLocalStudioRequest
-} from "../../../../server/lib/localStudioRequest.js";
-import {
-  aiStudioStatusCode,
-  requestBodyObject
-} from "../../../../server/lib/aiStudio/serverResponses.js";
-
-function requireLocalAiStudioRequest(request, reply) {
-  return requireLocalStudioRequest(request, reply, {
-    message: "AI Studio artifact routes only accept loopback Studio requests."
-  });
-}
+import { createAiStudioFeatureRoutes } from "../../../../server/lib/aiStudio/featureRoutes.js";
 
 function registerRoutes(
   app,
@@ -26,70 +12,35 @@ function registerRoutes(
     routeRelativePath = ""
   } = {}
 ) {
-  if (!app || typeof app.make !== "function") {
-    throw new Error("registerRoutes requires application make().");
-  }
-
-  const router = app.make("jskit.http.router");
-  const normalizedRouteSurface = normalizeSurfaceId(routeSurface);
-  const routeBase = resolveScopedApiBasePath({
-    routeBase: "/",
-    relativePath: routeRelativePath,
-    strictParams: false
+  const routes = createAiStudioFeatureRoutes(app, {
+    localRequestMessage: "AI Studio artifact routes only accept loopback Studio requests.",
+    routeRelativePath,
+    routeSurface,
+    tags: ["studio", "ai-studio-artifacts"]
   });
 
-  router.register(
-    "GET",
-    `${routeBase}/sessions/:sessionId/artifacts`,
-    {
-      auth: "public",
-      surface: normalizedRouteSurface,
-      meta: {
-        tags: ["studio", "ai-studio-artifacts"],
-        summary: "Read editable AI Studio artifacts."
-      }
+  routes.actionRoute("GET", "/sessions/:sessionId/artifacts", {
+    actionId: ACTION_READ_ARTIFACTS,
+    buildInput(request) {
+      return {
+        actionId: request.query?.actionId,
+        sessionId: request.params.sessionId
+      };
     },
-    async function (request, reply) {
-      if (!requireLocalAiStudioRequest(request, reply)) {
-        return;
-      }
-      const response = await request.executeAction({
-        actionId: ACTION_READ_ARTIFACTS,
-        input: {
-          actionId: request.query?.actionId,
-          sessionId: request.params.sessionId
-        }
-      });
-      reply.code(aiStudioStatusCode(response)).send(response);
-    }
-  );
+    summary: "Read editable AI Studio artifacts."
+  });
 
-  router.register(
-    "PUT",
-    `${routeBase}/sessions/:sessionId/artifacts`,
-    {
-      auth: "public",
-      surface: normalizedRouteSurface,
-      meta: {
-        tags: ["studio", "ai-studio-artifacts"],
-        summary: "Save editable AI Studio artifacts."
-      },
-      body: artifactsInputValidator
+  routes.actionRoute("PUT", "/sessions/:sessionId/artifacts", {
+    actionId: ACTION_SAVE_ARTIFACTS,
+    body: artifactsInputValidator,
+    buildInput(request) {
+      return {
+        ...routes.requestBody(request),
+        sessionId: request.params.sessionId
+      };
     },
-    async function (request, reply) {
-      if (!requireLocalAiStudioRequest(request, reply)) {
-        return;
-      }
-      const response = await request.executeAction({
-        actionId: ACTION_SAVE_ARTIFACTS,
-        input: {
-          ...requestBodyObject(request),
-          sessionId: request.params.sessionId
-        }
-      });
-      reply.code(aiStudioStatusCode(response)).send(response);
-    }
-  );
+    summary: "Save editable AI Studio artifacts."
+  });
 }
 
 export { registerRoutes };

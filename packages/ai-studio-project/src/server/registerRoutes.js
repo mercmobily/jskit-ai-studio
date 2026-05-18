@@ -1,5 +1,3 @@
-import { resolveScopedApiBasePath, normalizeSurfaceId } from "@jskit-ai/kernel/shared/surface";
-
 import {
   projectConfigInputValidator,
   projectTypeInputValidator
@@ -11,19 +9,7 @@ import {
   ACTION_SAVE_PROJECT_CONFIG,
   ACTION_SAVE_PROJECT_TYPE
 } from "./actions.js";
-import {
-  requireLocalStudioRequest
-} from "../../../../server/lib/localStudioRequest.js";
-import {
-  aiStudioStatusCode,
-  requestBodyObject
-} from "../../../../server/lib/aiStudio/serverResponses.js";
-
-function requireLocalAiStudioRequest(request, reply) {
-  return requireLocalStudioRequest(request, reply, {
-    message: "AI Studio project routes only accept loopback Studio requests."
-  });
-}
+import { createAiStudioFeatureRoutes } from "../../../../server/lib/aiStudio/featureRoutes.js";
 
 function registerRoutes(
   app,
@@ -32,134 +18,41 @@ function registerRoutes(
     routeRelativePath = ""
   } = {}
 ) {
-  if (!app || typeof app.make !== "function") {
-    throw new Error("registerRoutes requires application make().");
-  }
-
-  const router = app.make("jskit.http.router");
-  const normalizedRouteSurface = normalizeSurfaceId(routeSurface);
-  const routeBase = resolveScopedApiBasePath({
-    routeBase: "/",
-    relativePath: routeRelativePath,
-    strictParams: false
+  const routes = createAiStudioFeatureRoutes(app, {
+    localRequestMessage: "AI Studio project routes only accept loopback Studio requests.",
+    routeRelativePath,
+    routeSurface,
+    tags: ["studio", "ai-studio-project"]
   });
 
-  router.register(
-    "GET",
-    `${routeBase}/project-type`,
-    {
-      auth: "public",
-      surface: normalizedRouteSurface,
-      meta: {
-        tags: ["studio", "ai-studio-project"],
-        summary: "Read the AI Studio project type."
-      }
-    },
-    async function (request, reply) {
-      if (!requireLocalAiStudioRequest(request, reply)) {
-        return;
-      }
-      const response = await request.executeAction({
-        actionId: ACTION_READ_PROJECT_TYPE,
-        input: {}
-      });
-      reply.code(aiStudioStatusCode(response)).send(response);
-    }
-  );
+  routes.actionRoute("GET", "/project-type", {
+    actionId: ACTION_READ_PROJECT_TYPE,
+    summary: "Read the AI Studio project type."
+  });
 
-  router.register(
-    "PUT",
-    `${routeBase}/project-type`,
-    {
-      auth: "public",
-      surface: normalizedRouteSurface,
-      meta: {
-        tags: ["studio", "ai-studio-project"],
-        summary: "Set the AI Studio project type."
-      },
-      body: projectTypeInputValidator
-    },
-    async function (request, reply) {
-      if (!requireLocalAiStudioRequest(request, reply)) {
-        return;
-      }
-      const response = await request.executeAction({
-        actionId: ACTION_SAVE_PROJECT_TYPE,
-        input: requestBodyObject(request)
-      });
-      reply.code(aiStudioStatusCode(response)).send(response);
-    }
-  );
+  routes.actionRoute("PUT", "/project-type", {
+    actionId: ACTION_SAVE_PROJECT_TYPE,
+    body: projectTypeInputValidator,
+    buildInput: routes.requestBody,
+    summary: "Set the AI Studio project type."
+  });
 
-  router.register(
-    "GET",
-    `${routeBase}/project-config`,
-    {
-      auth: "public",
-      surface: normalizedRouteSurface,
-      meta: {
-        tags: ["studio", "ai-studio-project"],
-        summary: "Read the AI Studio project configuration."
-      }
-    },
-    async function (request, reply) {
-      if (!requireLocalAiStudioRequest(request, reply)) {
-        return;
-      }
-      const response = await request.executeAction({
-        actionId: ACTION_READ_PROJECT_CONFIG,
-        input: {}
-      });
-      reply.code(aiStudioStatusCode(response)).send(response);
-    }
-  );
+  routes.actionRoute("GET", "/project-config", {
+    actionId: ACTION_READ_PROJECT_CONFIG,
+    summary: "Read the AI Studio project configuration."
+  });
 
-  router.register(
-    "GET",
-    `${routeBase}/project-config/defaults`,
-    {
-      auth: "public",
-      surface: normalizedRouteSurface,
-      meta: {
-        tags: ["studio", "ai-studio-project"],
-        summary: "Read default AI Studio project configuration values."
-      }
-    },
-    async function (request, reply) {
-      if (!requireLocalAiStudioRequest(request, reply)) {
-        return;
-      }
-      const response = await request.executeAction({
-        actionId: ACTION_READ_PROJECT_CONFIG_DEFAULTS,
-        input: {}
-      });
-      reply.code(aiStudioStatusCode(response)).send(response);
-    }
-  );
+  routes.actionRoute("GET", "/project-config/defaults", {
+    actionId: ACTION_READ_PROJECT_CONFIG_DEFAULTS,
+    summary: "Read default AI Studio project configuration values."
+  });
 
-  router.register(
-    "PUT",
-    `${routeBase}/project-config`,
-    {
-      auth: "public",
-      surface: normalizedRouteSurface,
-      meta: {
-        tags: ["studio", "ai-studio-project"],
-        summary: "Save the AI Studio project configuration."
-      },
-      body: projectConfigInputValidator
-    },
-    async function (request, reply) {
-      if (!requireLocalAiStudioRequest(request, reply)) {
-        return;
-      }
-      const response = await request.executeAction({
-        actionId: ACTION_SAVE_PROJECT_CONFIG,
-        input: requestBodyObject(request)
-      });
-      reply.code(aiStudioStatusCode(response)).send(response);
-    }
-  );
+  routes.actionRoute("PUT", "/project-config", {
+    actionId: ACTION_SAVE_PROJECT_CONFIG,
+    body: projectConfigInputValidator,
+    buildInput: routes.requestBody,
+    summary: "Save the AI Studio project configuration."
+  });
 }
 
 export { registerRoutes };
